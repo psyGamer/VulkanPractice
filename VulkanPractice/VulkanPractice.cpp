@@ -38,6 +38,8 @@ void printExtensionPropertiesInfo();
 void printPhysicalDevicesInfo();
 #endif
 
+void recreateSwapchain();
+
 std::vector<char> readFile(const std::string& filePath);
 
 uint32_t getSwapchainImageCount();
@@ -48,7 +50,9 @@ VkInstance instance;
 VkSurfaceKHR surface;
 VkDevice device;
 VkQueue queue;
-VkSwapchainKHR swapchain;
+VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+
+std::vector<VkPhysicalDevice> physicalDevices;
 
 std::vector<VkImageView> imageViews;
 std::vector<VkFramebuffer> frameBuffers;
@@ -69,17 +73,37 @@ VkSemaphore semaphoreRenderingDone;
 
 GLFWwindow* window;
 
-const uint32_t windowWidth = 400, windowHeight = 300;
+uint32_t windowWidth = 400, windowHeight = 300;
 
 const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+
+void onWindowResized(GLFWwindow * window, int width, int height) {
+	if (width == 0 || height == 0)
+		return;
+
+	VkSurfaceCapabilitiesKHR surfaceCapabilities;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevices[0], surface, &surfaceCapabilities);
+
+	if (width > surfaceCapabilities.maxImageExtent.width)
+		width = surfaceCapabilities.maxImageExtent.width;
+	if (height > surfaceCapabilities.maxImageExtent.height)
+		height = surfaceCapabilities.maxImageExtent.height;
+
+	windowWidth = width;
+	windowHeight = height;
+
+	recreateSwapchain();
+}
 
 void startGlfw() {
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
 	window = glfwCreateWindow(windowWidth, windowHeight, "Vulkan Practice", nullptr, nullptr);
+
+	glfwSetWindowSizeCallback(window, onWindowResized);
 }
 
 void createInstance() {
@@ -169,6 +193,10 @@ void validateSurfaceSupport() {
 }
 
 void createSwapchain() {
+#ifndef _DEBUG
+	VkSurfaceCapabilitiesKHR surfaceCapabilities; // Avoid validation warning when in Release
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevices[0], surface, &surfaceCapabilities);
+#endif
 	VkSwapchainCreateInfoKHR swapchainCreateInfo;
 	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainCreateInfo.pNext = nullptr;
@@ -187,7 +215,7 @@ void createSwapchain() {
 	swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; //TODO civ
 	swapchainCreateInfo.clipped = VK_TRUE;
-	swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+	swapchainCreateInfo.oldSwapchain = swapchain;
 
 	ASSERT_VK(vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain));
 }
@@ -471,7 +499,6 @@ void createCommandBuffers() {
 	ASSERT_VK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, commandBuffers.data()));
 }
 
-
 void recordCommandBuffers() {
 	uint32_t swapchainImageCount = getSwapchainImageCount();
 
@@ -542,7 +569,47 @@ void startVulkan() {
 	recordCommandBuffers();
 
 	createSemaphores();
-}	
+}
+
+void recreateSwapchain() {
+	vkDeviceWaitIdle(device);
+
+	// Destroy old Pipeline
+
+	vkDestroyCommandPool(device, commandPool, nullptr);
+
+	for (auto frameBuffer : frameBuffers) {
+		vkDestroyFramebuffer(device, frameBuffer, nullptr);
+	}
+
+	vkDestroyPipeline(device, pipeline, nullptr);
+
+	vkDestroyRenderPass(device, renderPass, nullptr);
+	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
+	vkDestroyShaderModule(device, shaderModuleVert, nullptr);
+	vkDestroyShaderModule(device, shaderModuleFrag, nullptr);
+
+	for (auto imageView : imageViews) {
+		vkDestroyImageView(device, imageView, nullptr);
+	}
+
+	// Create new pipeline
+
+	const VkSwapchainKHR oldSwapchain = swapchain;
+
+	createSwapchain();
+	createImageViews();
+	createRenderPass();
+	createPipeline();
+	createFrameBuffers();
+
+	createCommandPool();
+	createCommandBuffers();
+	recordCommandBuffers();
+
+	vkDestroySwapchainKHR(device, oldSwapchain, nullptr);
+}
 
 void drawFrame() {
 	uint32_t imageIndex;
@@ -576,11 +643,20 @@ void drawFrame() {
 	ASSERT_VK(vkQueuePresentKHR(queue, &presentInfo));
 }
 
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+
 void gameLoop() {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
 		drawFrame();
+
+		float currentFrame = glfwGetTime();
+		deltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
+
+		glfwSetWindowTitle(window, (std::string("Vulkan Tutorial | FPS: ") + std::to_string(1.0f / deltaTime)).c_str());
 	}
 }
 
@@ -662,9 +738,12 @@ uint32_t getSwapchainImageCount() {
 }
 
 std::vector< VkPhysicalDevice> getPhysicalDevices() {
+	if (physicalDevices.size() > 0) {
+		return physicalDevices;
+	} 
+
 	uint32_t physicalDeviceCount;
 	ASSERT_VK(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr));
-	std::vector<VkPhysicalDevice> physicalDevices;
 	physicalDevices.resize(physicalDeviceCount);
 	ASSERT_VK(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices.data()));
 
