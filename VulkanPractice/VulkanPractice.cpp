@@ -8,8 +8,12 @@
 
 #include "VulkanUtils.h"
 #include "Camera.h"
+#include "Image.h"
 
 void recreateSwapchain();
+
+Camera camera;
+Image diamondImage;
 
 VkInstance instance;
 VkSurfaceKHR surface;
@@ -85,8 +89,6 @@ public:
 };
 
 const float squreSize = .5f;
-
-Camera camera = Camera();
 
 glm::mat4 modelViewProj;
 
@@ -630,6 +632,14 @@ void createCommandBuffers() {
 	ASSERT_VK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, commandBuffers.data()));
 }
 
+void loadTexture() {
+	diamondImage.LoadImage("Assets/diamond_block.png");
+
+	std::cout << diamondImage.GetWidth() << std::endl;
+	std::cout << diamondImage.GetHeight() << std::endl;
+	std::cout << diamondImage.GetSizeInBytes() << std::endl;
+}
+
 void createVertexBuffer() {
 	createAndUploadBuffer(instance, device, queue, commandPool, vertices, vertexBuffer, vertexBufferDeviceMemory, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 }
@@ -793,6 +803,7 @@ void startVulkan() {
 	createCommandPool();
 	createCommandBuffers();
 
+	loadTexture();
 	createVertexBuffer();
 	createIndexBuffer();
 	createUniformBuffer();
@@ -950,6 +961,8 @@ void shutdownVulkan() {
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
 	vkFreeMemory(device, indexBufferDeviceMemory, nullptr);
 	vkDestroyBuffer(device, indexBuffer, nullptr);
+
+	diamondImage.Destory();
 
 	vkDestroyCommandPool(device, commandPool, nullptr);
 
