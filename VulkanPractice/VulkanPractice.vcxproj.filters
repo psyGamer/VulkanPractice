@@ -24,10 +24,13 @@
     <ClCompile Include="Camera.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="Image.cpp">
+    <ClCompile Include="Image\Image.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
     <ClCompile Include="Vertex.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="Image\DepthImage.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>
@@ -43,10 +46,13 @@
     <ClInclude Include="Camera.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="Image.h">
+    <ClInclude Include="Image\Image.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="Vertex.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="Image\DepthImage.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>

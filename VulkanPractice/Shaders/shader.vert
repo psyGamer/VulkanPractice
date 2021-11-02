@@ -8,7 +8,7 @@ layout(binding = 0) uniform UBO {
 	mat4 uModelViewProj;
 } ubo;
 
-layout(location = 0) in vec2 aPos;
+layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec2 aUV;
 layout(location = 2) in vec3 aColor;
 
@@ -22,5 +22,5 @@ void main() {
 	vColor.g = ubo.uModelViewProj[1][1] * aColor.g + 0.1;
 	vColor.b = ubo.uModelViewProj[3][2] * aColor.b + 0.1;
 
-	gl_Position = ubo.uModelViewProj * vec4(aPos, 0.0, 1.0);
+	gl_Position = ubo.uModelViewProj * vec4(aPos, 1.0);
 }

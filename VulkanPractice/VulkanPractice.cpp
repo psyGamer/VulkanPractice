@@ -7,14 +7,16 @@
 #include <time.h>
 
 #include "VulkanUtils.h"
-#include "Camera.h"
-#include "Image.h"
+#include "Image/DepthImage.h"
+#include "Image/Image.h"
 #include "Vertex.h"
+#include "Camera.h"
 
 void recreateSwapchain();
 
 Camera camera;
 Image diamondImage;
+DepthImage depthImage;
 
 VkInstance instance;
 VkSurfaceKHR surface;
@@ -61,15 +63,23 @@ const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 const float squreSize = .5f;
 
 std::vector<Vertex> vertices = {
-	Vertex(glm::vec2{ -1.0f, -1.0f } * squreSize, { 0.0f, 0.0f }, { 1.0f, 0.0f, 1.0f }), // 0 Top Left
-	Vertex(glm::vec2{  1.0f, -1.0f } * squreSize, { 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }), // 1 Top Right
-	Vertex(glm::vec2{ -1.0f,  1.0f } * squreSize, { 0.0f, 1.0f }, { 0.0f, 0.0f, 1.0f }), // 2 Bottom Left
-	Vertex(glm::vec2{  1.0f,  1.0f } * squreSize, { 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f }), // 3 Bottom Right
+	Vertex(glm::vec3{ -1.0f, -1.0f, 0.0f } * squreSize, { 0.0f, 0.0f }, { 1.0f, 0.0f, 1.0f }), // 0 Top Left
+	Vertex(glm::vec3{  1.0f, -1.0f, 0.0f } * squreSize, { 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }), // 1 Top Right
+	Vertex(glm::vec3{ -1.0f,  1.0f, 0.0f } * squreSize, { 0.0f, 1.0f }, { 0.0f, 0.0f, 1.0f }), // 2 Bottom Left
+	Vertex(glm::vec3{  1.0f,  1.0f, 0.0f } * squreSize, { 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f }), // 3 Bottom Right
+
+	Vertex(glm::vec3{ -1.0f, -1.0f, -1.0f } *squreSize, { 0.0f, 0.0f }, { 1.0f, 0.0f, 1.0f }), // 4 Top Left
+	Vertex(glm::vec3{  1.0f, -1.0f, -1.0f } *squreSize, { 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }), // 5 Top Right
+	Vertex(glm::vec3{ -1.0f,  1.0f, -1.0f } *squreSize, { 0.0f, 1.0f }, { 0.0f, 0.0f, 1.0f }), // 6 Bottom Left
+	Vertex(glm::vec3{  1.0f,  1.0f, -1.0f } *squreSize, { 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f }), // 7 Bottom Right
 };
 
 std::vector<uint32_t> indices = {
 	0, 3, 2,
-	0, 1, 3
+	0, 1, 3,
+
+	4, 7, 6,
+	4, 5, 7
 };
 
 void onWindowResized(GLFWwindow * window, int width, int height) {
@@ -300,6 +310,8 @@ void createImageViews() {
 }
 
 void createRenderPass() {
+	std::vector<VkAttachmentDescription> attachmentDescriptions;
+
 	VkAttachmentDescription attachmentDescription;
 	attachmentDescription.flags = 0;
 	attachmentDescription.format = imageFormat;
@@ -310,10 +322,18 @@ void createRenderPass() {
 	attachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachmentDescription.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	attachmentDescriptions.push_back(attachmentDescription);
 
 	VkAttachmentReference attachmentReference;
 	attachmentReference.attachment = 0;
 	attachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentDescription depthAttachment = DepthImage::GetDepthAttachmentDescription(getPhysicalDevices(instance)[0]);
+	attachmentDescriptions.push_back(depthAttachment);
+
+	VkAttachmentReference depthAttachmentReference;
+	depthAttachmentReference.attachment = 1;
+	depthAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkSubpassDescription subpassDescription;
 	subpassDescription.flags = 0;
@@ -323,7 +343,7 @@ void createRenderPass() {
 	subpassDescription.colorAttachmentCount = 1;
 	subpassDescription.pColorAttachments = &attachmentReference;
 	subpassDescription.pResolveAttachments = nullptr;
-	subpassDescription.pDepthStencilAttachment = nullptr;
+	subpassDescription.pDepthStencilAttachment = &depthAttachmentReference;
 	subpassDescription.preserveAttachmentCount = 0;
 	subpassDescription.pPreserveAttachments = nullptr;
 
@@ -340,8 +360,8 @@ void createRenderPass() {
 	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassCreateInfo.pNext = nullptr;
 	renderPassCreateInfo.flags = 0;
-	renderPassCreateInfo.attachmentCount = 1;
-	renderPassCreateInfo.pAttachments = &attachmentDescription;
+	renderPassCreateInfo.attachmentCount = attachmentDescriptions.size();
+	renderPassCreateInfo.pAttachments = attachmentDescriptions.data();
 	renderPassCreateInfo.subpassCount = 1;
 	renderPassCreateInfo.pSubpasses = &subpassDescription;
 	renderPassCreateInfo.dependencyCount = 1;
@@ -525,6 +545,8 @@ void createPipeline() {
 	dynamicStateCreateInfo.dynamicStateCount = 2;
 	dynamicStateCreateInfo.pDynamicStates = dynamicStates;
 
+	auto depthStencilState = DepthImage::GetDepthStencilCreateInfoOpaque();
+
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo;
 	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineCreateInfo.pNext = nullptr;
@@ -537,7 +559,7 @@ void createPipeline() {
 	pipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
 	pipelineCreateInfo.pRasterizationState = &rasterizationCreateInfo;
 	pipelineCreateInfo.pMultisampleState = &multisampleCreateInfo;
-	pipelineCreateInfo.pDepthStencilState = nullptr;
+	pipelineCreateInfo.pDepthStencilState = &depthStencilState;
 	pipelineCreateInfo.pColorBlendState = &colorBlendCreateInfo;
 	pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
 	pipelineCreateInfo.layout = pipelineLayout;
@@ -555,13 +577,17 @@ void createFrameBuffers() {
 	frameBuffers.resize(swapchainImageCount);
 
 	for (int i = 0; i < swapchainImageCount; i++) {
+		std::vector<VkImageView> attachmentViews;
+		attachmentViews.push_back(imageViews[i]);
+		attachmentViews.push_back(depthImage.GetImageView());
+
 		VkFramebufferCreateInfo framebufferCreateInfo;
 		framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferCreateInfo.pNext = nullptr;
 		framebufferCreateInfo.flags = 0;
 		framebufferCreateInfo.renderPass = renderPass;
-		framebufferCreateInfo.attachmentCount = 1;
-		framebufferCreateInfo.pAttachments = &(imageViews[i]);
+		framebufferCreateInfo.attachmentCount = attachmentViews.size();
+		framebufferCreateInfo.pAttachments = attachmentViews.data();
 		framebufferCreateInfo.width = windowWidth;
 		framebufferCreateInfo.height = windowHeight;
 		framebufferCreateInfo.layers = 1;
@@ -578,6 +604,10 @@ void createCommandPool() {
 	commandPoolCreateInfo.queueFamilyIndex = 0; //TODO civ
 
 	ASSERT_VK(vkCreateCommandPool(device, &commandPoolCreateInfo, nullptr, &commandPool));
+}
+
+void createDepthImage() {
+	depthImage.Create(device, getPhysicalDevices(instance)[0], commandPool, queue, windowWidth, windowHeight);
 }
 
 void createCommandBuffers() {
@@ -703,6 +733,10 @@ void recordCommandBuffers() {
 
 	for (int i = 0; i < swapchainImageCount; i++) {
 		ASSERT_VK(vkBeginCommandBuffer(commandBuffers[i], &commandBufferBeginInfo));
+		
+		std::vector<VkClearValue> clearValues;
+		clearValues.push_back({ 0.0f, 0.0f, 0.0f, 1.0f }); // Clear Value
+		clearValues.push_back({ 1.0f, 0.0f }); // Depth Clear Value
 
 		VkRenderPassBeginInfo renderPassBeginInfo;
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -711,9 +745,8 @@ void recordCommandBuffers() {
 		renderPassBeginInfo.framebuffer = frameBuffers[i];
 		renderPassBeginInfo.renderArea.offset = { 0, 0 };
 		renderPassBeginInfo.renderArea.extent = { windowWidth, windowHeight };
-		VkClearValue clearValue = { 0.0f, 0.0f, 0.0f, 1.0f };
-		renderPassBeginInfo.clearValueCount = 1;
-		renderPassBeginInfo.pClearValues = &clearValue;
+		renderPassBeginInfo.clearValueCount = clearValues.size();
+		renderPassBeginInfo.pClearValues = clearValues.data();
 
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -781,6 +814,8 @@ void startVulkan() {
 	createDescriptorSetLayout();
 
 	createPipeline();
+	createCommandPool();
+	createDepthImage();
 	createFrameBuffers();
 
 	for (auto& vertex : vertices) {
@@ -788,8 +823,7 @@ void startVulkan() {
 		vertex.color.g = (float)(rand() % 255) / 255.0f;
 		vertex.color.b = (float)(rand() % 255) / 255.0f;
 	}
-
-	createCommandPool();
+	
 	createCommandBuffers();
 
 	loadTexture();
@@ -953,12 +987,13 @@ void shutdownVulkan() {
 
 	diamondImage.Destory();
 
-	vkDestroyCommandPool(device, commandPool, nullptr);
-
 	for (auto frameBuffer : frameBuffers) {
 		vkDestroyFramebuffer(device, frameBuffer, nullptr);
 	}
 
+	depthImage.Destory();
+
+	vkDestroyCommandPool(device, commandPool, nullptr);
 	vkDestroyPipeline(device, pipeline, nullptr);
 
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);

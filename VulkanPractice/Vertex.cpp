@@ -1,8 +1,8 @@
 #include "Vertex.h"
 
-Vertex::Vertex(glm::vec2 position, glm::vec2 uvCoord)
+Vertex::Vertex(glm::vec3 position, glm::vec2 uvCoord)
 	: Vertex(position, uvCoord, glm::vec3{ 1.0f, 1.0f, 1.0f }) { }
-Vertex::Vertex(glm::vec2 position, glm::vec2 uvCoord, glm::vec3 color)
+Vertex::Vertex(glm::vec3 position, glm::vec2 uvCoord, glm::vec3 color)
 	: position(position), uvCoord(uvCoord), color(color) { }
 
 VkVertexInputBindingDescription Vertex::getBindingDescription() {
@@ -18,7 +18,7 @@ std::vector<VkVertexInputAttributeDescription> Vertex::getAttributeDescriptions(
 	std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
 	attributeDescriptions[0].location = 0;
 	attributeDescriptions[0].binding = 0;
-	attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 	attributeDescriptions[0].offset = offsetof(Vertex, position);
 
 	attributeDescriptions[1].location = 1;

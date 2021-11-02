@@ -4,6 +4,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -34,13 +35,17 @@
 
 std::vector<char> readFile(const std::string & filePath);
 
+bool isFormatSupported(VkPhysicalDevice& physicalDevice, VkFormat format, VkImageTiling imageTiling, VkFormatFeatureFlags featureFlags);
+VkFormat findSupportedFormat(VkPhysicalDevice& physicalDevice, const std::vector<VkFormat>& formats, VkImageTiling imageTiling, VkFormatFeatureFlags featureFlags);
+bool isStencilFormat(VkFormat format);
+
 VkCommandBuffer startSingleTimeCommandBuffer(VkDevice& device, VkCommandPool& commandPool);
 void endSingleTimeCommandBuffer(VkDevice& device, VkCommandBuffer& commandBuffer, VkQueue& queue, VkCommandPool& commandPool);
 
 void createImage(VkDevice& device, VkPhysicalDevice& physicalDevice, uint32_t width, uint32_t height, VkFormat imageFormat, VkImageTiling imageTiling, VkImageUsageFlags imageUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkImage& image, VkDeviceMemory& imageMemory);
 void createImageView(VkDevice& device, VkImage& image, VkFormat format, VkImageAspectFlags aspectFlags, VkImageView& imageView);
 
-void changeLayout(VkDevice& device, VkImage& image, VkCommandPool& commandPool, VkQueue& queue, VkImageLayout& oldLayout, VkImageLayout	 newLayout);
+void changeImageLayout(VkDevice& device, VkImage& image, VkFormat format, VkCommandPool& commandPool, VkQueue& queue, VkImageLayout oldLayout, VkImageLayout	 newLayout);
 
 void copyBuffer(VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, VkBuffer& src, VkBuffer& dst, VkDeviceSize size);
 

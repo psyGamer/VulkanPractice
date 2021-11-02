@@ -3,7 +3,7 @@
 #include <string>
 #include <stb_image.h>
 
-#include "VulkanUtils.h"
+#include "../VulkanUtils.h"
 
 class Image {
 

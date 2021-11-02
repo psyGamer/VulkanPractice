@@ -67,7 +67,7 @@ VkImageView& Image::GetImageView() {
 }
 
 void Image::ChangeLayout(VkCommandPool& commandPool, VkQueue& queue, VkImageLayout layout) {
-	changeLayout(m_Device, m_Image, commandPool, queue, m_ImageLayout, layout);
+	changeImageLayout(m_Device, m_Image, VK_FORMAT_R8G8B8A8_UNORM, commandPool, queue, m_ImageLayout, layout);
 
 	m_ImageLayout = layout;
 }

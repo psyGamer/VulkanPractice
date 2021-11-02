@@ -171,7 +171,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
-    <ClCompile Include="Image.cpp" />
+    <ClCompile Include="Image\DepthImage.cpp" />
+    <ClCompile Include="Image\Image.cpp" />
     <ClCompile Include="Vertex.cpp" />
     <ClCompile Include="VulkanPractice.cpp" />
     <ClCompile Include="VulkanUtils.cpp" />
@@ -185,7 +186,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
-    <ClInclude Include="Image.h" />
+    <ClInclude Include="Image\DepthImage.h" />
+    <ClInclude Include="Image\Image.h" />
     <ClInclude Include="Vertex.h" />
     <ClInclude Include="VulkanUtils.h" />
   </ItemGroup>
