@@ -95,6 +95,24 @@ uint32_t windowWidth = 400, windowHeight = 300;
 
 const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
+class Camera {
+public:
+	glm::vec3 pos;
+	glm::vec3 front;
+	glm::vec3 up;
+
+	float yaw, pitch;
+	float fov;
+
+	Camera() {
+		pos = glm::vec3(0.0f, 1.0f, 1.0f);
+		front = glm::vec3(0.0f, 0.0f, -1.0f);
+		up = glm::vec3(0.0f, -1.0f, 0.0f);
+
+		fov = 70.0f;
+	}
+};
+
 class Vertex {
 public:
 	glm::vec2 pos;
@@ -130,6 +148,8 @@ public:
 
 const float squreSize = .5f;
 
+Camera cam = Camera();
+
 glm::mat4 modelViewProj;
 
 std::vector<Vertex> vertices = {
@@ -162,6 +182,68 @@ void onWindowResized(GLFWwindow * window, int width, int height) {
 	recreateSwapchain();
 }
 
+bool firstMouse = true;
+float lastMouseX = windowWidth / 2.0f, lastMouseY = windowHeight / 2.0f;
+
+void onMouseMove(GLFWwindow* window, double xpos, double ypos) {
+	const float sensitivity = 0.1f;
+
+	if (firstMouse) {
+		lastMouseX = xpos;
+		lastMouseY = ypos;
+		firstMouse = false;
+	}
+
+	float xOffset = (xpos - lastMouseX) * sensitivity;
+	float yOffset = (ypos - lastMouseY) * sensitivity;
+
+	lastMouseX = xpos;
+	lastMouseY = ypos;
+
+	cam.yaw -= xOffset;
+	cam.pitch += yOffset;
+
+	if (cam.pitch > 89.0f)
+		cam.pitch = 89.0f;
+	if (cam.pitch < -89.0f)
+		cam.pitch = -89.0f;
+
+	glm::vec3 direction;
+	direction.x = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
+	direction.y = sin(glm::radians(cam.pitch));
+	direction.z = sin(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
+
+	cam.front = glm::normalize(direction);
+}
+
+void onMouseScroll(GLFWwindow* window, double xoffset, double yoffset) {
+	const float sensitivity = 2.0f;
+	cam.fov -= (float)yoffset * sensitivity;
+	if (cam.fov < 1.0f)
+		cam.fov = 1.0f;
+	if (cam.fov > 150.0f)
+		cam.fov = 150.0f;
+}
+
+void processInput(GLFWwindow* window) {
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, true);
+
+	const float cameraSpeed = 0.05f; // adjust accordingly
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		cam.pos += cameraSpeed * cam.front;
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		cam.pos -= cameraSpeed * cam.front;
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		cam.pos -= glm::normalize(glm::cross(cam.front, cam.up)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		cam.pos += glm::normalize(glm::cross(cam.front, cam.up)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+		cam.pos -= glm::vec3(0.0f, 1.0f, 0.0f) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+		cam.pos += glm::vec3(0.0f, 1.0f, 0.0f) * cameraSpeed;
+}
+
 void startGlfw() {
 	glfwInit();
 
@@ -170,7 +252,11 @@ void startGlfw() {
 
 	window = glfwCreateWindow(windowWidth, windowHeight, "Vulkan Practice", nullptr, nullptr);
 
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
 	glfwSetWindowSizeCallback(window, onWindowResized);
+	glfwSetCursorPosCallback(window, onMouseMove);
+	glfwSetScrollCallback(window, onMouseScroll);
 }
 
 void createInstance() {
@@ -461,8 +547,8 @@ void createPipeline() {
 	rasterizationCreateInfo.depthClampEnable = VK_FALSE;
 	rasterizationCreateInfo.rasterizerDiscardEnable = VK_FALSE;
 	rasterizationCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
-	rasterizationCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizationCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizationCreateInfo.cullMode = VK_CULL_MODE_NONE;
+	rasterizationCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterizationCreateInfo.depthBiasEnable = VK_FALSE;
 	rasterizationCreateInfo.depthBiasConstantFactor = VK_FALSE;
 	rasterizationCreateInfo.depthBiasClamp = 0.0f;
@@ -965,9 +1051,17 @@ void updateModelViewProj() {
 
 	float timeSinceStart = std::chrono::duration_cast<std::chrono::milliseconds>(currentFrameTime - gameStartTime).count() / 1000.0f;
 
-	glm::mat4 model = glm::rotate(glm::mat4(1.0f), timeSinceStart * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	glm::mat4 view = glm::lookAt(glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	glm::mat4 proj = glm::perspective(glm::radians(60.0f), windowWidth / (float)windowHeight, 0.01f, 10.0f);
+	processInput(window);
+
+	const float radius = 1.5f;
+	const float speed = 1.0f;
+	float camX = sin(glfwGetTime() * speed) * radius;
+	float camZ = cos(glfwGetTime() * speed) * radius;
+
+	glm::mat4 model = glm::rotate(glm::mat4(1.0f), 0 * timeSinceStart * glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	//glm::mat4 view = glm::lookAt(glm::vec3(camX, 1.0f, camZ), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::mat4 view = glm::lookAt(cam.pos, cam.pos + cam.front, cam.up);
+	glm::mat4 proj = glm::perspective(glm::radians(cam.fov), windowWidth / (float)windowHeight, 0.01f, 100.0f);
 
 	proj[1][1] *= -1; // Flip Y axis
 
@@ -991,10 +1085,11 @@ void updateDeltaTime() {
 		minDeletaTime = deltaTime;
 
 	glfwSetWindowTitle(window, (
-		std::string("Vulkan Tutorial | FPS: ") + std::to_string(1.0f / deltaTime) +
+		std::string("Vulkan Tutorial | FOV: ") + std::to_string(cam.fov) +
+		std::string(" | FPS: ") + std::to_string(1.0f / deltaTime) +
 		std::string(" ( Min: ") + std::to_string(1.0f / maxDeltaTime) +
 		std::string(", Max: ") + std::to_string(1.0f / minDeletaTime) + std::string(" )")
-		).c_str());
+	).c_str());
 }
 
 void gameLoop() {
