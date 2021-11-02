@@ -9,5 +9,5 @@ layout(binding = 1) uniform sampler2D tex;
 
 void main() {
 	//fColor = texture(tex, vUV) * vec4(vColor, 1.0);
-	fColor = texture(tex, vUV);
+	fColor = texture(tex, vUV * 3.0);
 }

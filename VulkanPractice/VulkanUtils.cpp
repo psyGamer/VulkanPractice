@@ -25,8 +25,7 @@ std::vector<char> readFile(const std::string& filePath) {
 
 // Vulkan Helper Functions
 
-void copyBuffer(VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, VkBuffer& src, VkBuffer& dst, VkDeviceSize size) {
-
+VkCommandBuffer startSingleTimeCommandBuffer(VkDevice& device, VkCommandPool& commandPool) {
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo;
 	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	commandBufferAllocateInfo.pNext = nullptr;
@@ -45,13 +44,10 @@ void copyBuffer(VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, Vk
 
 	ASSERT_VK(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
 
-	VkBufferCopy bufferCopy;
-	bufferCopy.srcOffset = 0;
-	bufferCopy.dstOffset = 0;
-	bufferCopy.size = size;
+	return commandBuffer;
+}
 
-	vkCmdCopyBuffer(commandBuffer, src, dst, 1, &bufferCopy);
-
+void endSingleTimeCommandBuffer(VkDevice& device, VkCommandBuffer& commandBuffer, VkQueue& queue, VkCommandPool& commandPool) {
 	ASSERT_VK(vkEndCommandBuffer(commandBuffer));
 
 	VkSubmitInfo submitInfo;
@@ -69,6 +65,113 @@ void copyBuffer(VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, Vk
 
 	vkQueueWaitIdle(queue);
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+
+void createImage(VkDevice& device, VkPhysicalDevice& physicalDevice, uint32_t width, uint32_t height, VkFormat imageFormat, VkImageTiling imageTiling, VkImageUsageFlags imageUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkImage& image, VkDeviceMemory& imageMemory) {
+
+	VkImageCreateInfo imageCreateInfo;
+	imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageCreateInfo.pNext = nullptr;
+	imageCreateInfo.flags = 0;
+	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageCreateInfo.format = imageFormat;
+	imageCreateInfo.extent = { width, height, 1 };
+	imageCreateInfo.mipLevels = 1;
+	imageCreateInfo.arrayLayers = 1;
+	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageCreateInfo.tiling = imageTiling;
+	imageCreateInfo.usage = imageUsageFlags;
+	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageCreateInfo.queueFamilyIndexCount = 0;
+	imageCreateInfo.pQueueFamilyIndices = nullptr;
+	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+
+	ASSERT_VK(vkCreateImage(device, &imageCreateInfo, nullptr, &image));
+
+	VkMemoryRequirements memoryRequirements;
+	vkGetImageMemoryRequirements(device, image, &memoryRequirements);
+
+	VkMemoryAllocateInfo memoryAllocateInfo;
+	memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memoryAllocateInfo.pNext = nullptr;
+	memoryAllocateInfo.allocationSize = memoryRequirements.size;
+	memoryAllocateInfo.memoryTypeIndex = findMemoryTypeIndex(physicalDevice, memoryRequirements.memoryTypeBits, memoryPropertyFlags);
+
+	ASSERT_VK(vkAllocateMemory(device, &memoryAllocateInfo, nullptr, &imageMemory));
+
+
+	vkBindImageMemory(device, image, imageMemory, 0);
+}
+
+void createImageView(VkDevice& device, VkImage& image, VkFormat format, VkImageAspectFlags aspectFlags, VkImageView& imageView) {
+	VkImageViewCreateInfo imageViewCreateInfo;
+	imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	imageViewCreateInfo.pNext = nullptr;
+	imageViewCreateInfo.flags = 0;
+	imageViewCreateInfo.image = image;
+	imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	imageViewCreateInfo.format = format;
+	imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	imageViewCreateInfo.subresourceRange.aspectMask = aspectFlags;
+	imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+	imageViewCreateInfo.subresourceRange.levelCount = 1;
+	imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+	imageViewCreateInfo.subresourceRange.layerCount = 1;
+
+	ASSERT_VK(vkCreateImageView(device, &imageViewCreateInfo, nullptr, &imageView));
+}
+
+void changeLayout(VkDevice& device, VkImage& image, VkCommandPool& commandPool, VkQueue& queue, VkImageLayout& oldLayout, VkImageLayout newLayout) {
+	auto commandBuffer = startSingleTimeCommandBuffer(device, commandPool);
+
+	VkImageMemoryBarrier imageMemoryBarrier;
+	imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	imageMemoryBarrier.pNext = nullptr;
+	imageMemoryBarrier.oldLayout = oldLayout;
+	imageMemoryBarrier.newLayout = newLayout;
+	imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	imageMemoryBarrier.image = image;
+	imageMemoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageMemoryBarrier.subresourceRange.baseMipLevel = 0;
+	imageMemoryBarrier.subresourceRange.levelCount = 1;
+	imageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
+	imageMemoryBarrier.subresourceRange.layerCount = 1;
+
+	if (oldLayout == VK_IMAGE_LAYOUT_PREINITIALIZED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+		imageMemoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+		imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	} else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+		imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	} else {
+		std::cerr << "Layout transition not yet supported!";
+		throw std::logic_error("Layout transition not yet supported!");
+	}
+
+	vkCmdPipelineBarrier(commandBuffer,
+		VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0,
+		0, nullptr, 0, nullptr, 1, &imageMemoryBarrier
+	);
+
+	endSingleTimeCommandBuffer(device, commandBuffer, queue, commandPool);
+}
+
+void copyBuffer(VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, VkBuffer& src, VkBuffer& dst, VkDeviceSize size) {
+
+	auto commandBuffer = startSingleTimeCommandBuffer(device, commandPool);
+
+	VkBufferCopy bufferCopy;
+	bufferCopy.srcOffset = 0;
+	bufferCopy.dstOffset = 0;
+	bufferCopy.size = size;
+
+	vkCmdCopyBuffer(commandBuffer, src, dst, 1, &bufferCopy);
+
+	endSingleTimeCommandBuffer(device, commandBuffer, queue, commandPool);
 }
 
 void createBuffer(VkDevice& device, VkPhysicalDevice& physicalDevice, VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags) {
