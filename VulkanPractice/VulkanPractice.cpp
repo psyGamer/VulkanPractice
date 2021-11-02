@@ -3,63 +3,19 @@
 #include <vector>
 #include <chrono>
 
-#include <fstream>
-
 #include <stdlib.h>
 #include <time.h>
 
-#pragma warning(disable : 26812)
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-//#include <vulkan/vulkan.h>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-// Ensures that VkResult is VK_SUCCESS
-#ifndef ASSERT_VK 
-VkResult __assert_vk_result;
-#endif
-#define ASSERT_VK(exp)\
-	__assert_vk_result = (exp);\
-	if (__assert_vk_result != VK_SUCCESS) {\
-		std::cerr << "An unexpected error occurred on " << __FILE__ << ":" << __LINE__ << "\n\tError Code: " << __assert_vk_result;\
-		__debugbreak();\
-	}
-
-// Use at your own risk
-#define GET_VK(vkName, varName, ...)\
-	Vk ## vkName varName;\
-	vkGet ## vkName ## (__VA_ARGS__, &varName)
-// Converts a Vulkan version int to a human readable stirng
-#define VERION_STR_VK(ver)\
-	(std::to_string(VK_API_VERSION_MAJOR(ver))\
-		+ std::string(".") + std::to_string(VK_API_VERSION_MINOR(ver))\
-		+ std::string(".") + std::to_string(VK_API_VERSION_PATCH(ver)))
-// Returns "Yes" or "No" depending on, if the specified bit is set
-#define YES_NO_BIT(val, bit) (((val & bit) != 0) ? "Yes" : "No")
-
-#ifdef _DEBUG
-void printLayerPropertiesInfo();
-void printExtensionPropertiesInfo();
-void printPhysicalDevicesInfo();
-#endif
+#include "VulkanUtils.h"
+#include "Camera.h"
 
 void recreateSwapchain();
-
-std::vector<char> readFile(const std::string& filePath);
-
-uint32_t getSwapchainImageCount();
-std::vector<VkPhysicalDevice> getPhysicalDevices();
-void createShaderModule(const std::vector<char>& code, VkShaderModule* shaderModule);
 
 VkInstance instance;
 VkSurfaceKHR surface;
 VkDevice device;
 VkQueue queue;
 VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-
-std::vector<VkPhysicalDevice> physicalDevices;
 
 std::vector<VkImageView> imageViews;
 std::vector<VkFramebuffer> frameBuffers;
@@ -91,27 +47,9 @@ VkSemaphore semaphoreRenderingDone;
 
 GLFWwindow* window;
 
-uint32_t windowWidth = 400, windowHeight = 300;
+uint32_t windowWidth = 800, windowHeight = 600;
 
 const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
-
-class Camera {
-public:
-	glm::vec3 pos;
-	glm::vec3 front;
-	glm::vec3 up;
-
-	float yaw, pitch;
-	float fov;
-
-	Camera() {
-		pos = glm::vec3(0.0f, 1.0f, 1.0f);
-		front = glm::vec3(0.0f, 0.0f, -1.0f);
-		up = glm::vec3(0.0f, -1.0f, 0.0f);
-
-		fov = 70.0f;
-	}
-};
 
 class Vertex {
 public:
@@ -148,7 +86,7 @@ public:
 
 const float squreSize = .5f;
 
-Camera cam = Camera();
+Camera camera = Camera();
 
 glm::mat4 modelViewProj;
 
@@ -169,7 +107,7 @@ void onWindowResized(GLFWwindow * window, int width, int height) {
 		return;
 
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevices[0], surface, &surfaceCapabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(getPhysicalDevices(instance)[0], surface, &surfaceCapabilities);
 
 	if (width > surfaceCapabilities.maxImageExtent.width)
 		width = surfaceCapabilities.maxImageExtent.width;
@@ -189,8 +127,8 @@ void onMouseMove(GLFWwindow* window, double xpos, double ypos) {
 	const float sensitivity = 0.1f;
 
 	if (firstMouse) {
-		lastMouseX = xpos;
-		lastMouseY = ypos;
+		lastMouseX = -xpos;
+		lastMouseY =  ypos;
 		firstMouse = false;
 	}
 
@@ -200,48 +138,51 @@ void onMouseMove(GLFWwindow* window, double xpos, double ypos) {
 	lastMouseX = xpos;
 	lastMouseY = ypos;
 
-	cam.yaw -= xOffset;
-	cam.pitch += yOffset;
+	camera.Rotate({ xOffset, yOffset });
 
-	if (cam.pitch > 89.0f)
-		cam.pitch = 89.0f;
-	if (cam.pitch < -89.0f)
-		cam.pitch = -89.0f;
+	if (camera.GetPitch() > 89.0f)
+		camera.SetPitch(89.0f);
+	if (camera.GetPitch() < -89.0f)
+		camera.SetPitch(-89.0f);
 
 	glm::vec3 direction;
-	direction.x = cos(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
-	direction.y = sin(glm::radians(cam.pitch));
-	direction.z = sin(glm::radians(cam.yaw)) * cos(glm::radians(cam.pitch));
+	direction.x = cos(glm::radians(camera.GetYaw())) * cos(glm::radians(camera.GetPitch()));
+	direction.y = sin(glm::radians(camera.GetPitch()));
+	direction.z = sin(glm::radians(camera.GetYaw())) * cos(glm::radians(camera.GetPitch()));
 
-	cam.front = glm::normalize(direction);
+	camera.SetFront(glm::normalize(direction));
 }
 
 void onMouseScroll(GLFWwindow* window, double xoffset, double yoffset) {
 	const float sensitivity = 2.0f;
-	cam.fov -= (float)yoffset * sensitivity;
-	if (cam.fov < 1.0f)
-		cam.fov = 1.0f;
-	if (cam.fov > 150.0f)
-		cam.fov = 150.0f;
+
+	camera.ChangeFOV(-yoffset * sensitivity);
+
+	if (camera.GetFOV() < 1.0f)
+		camera.SetFOV(1.0f);
+	if (camera.GetFOV() > 150.0f)
+		camera.SetFOV(150.0f);
 }
 
 void processInput(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 
-	const float cameraSpeed = 0.05f; // adjust accordingly
+	const float cameraSpeed = 0.05f;
+
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-		cam.pos += cameraSpeed * cam.front;
+		camera.Move(+cameraSpeed * camera.GetFront());
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		cam.pos -= cameraSpeed * cam.front;
+		camera.Move(-cameraSpeed * camera.GetFront());
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		cam.pos -= glm::normalize(glm::cross(cam.front, cam.up)) * cameraSpeed;
+		camera.Move(-glm::normalize(glm::cross(camera.GetFront(), camera.GetUp())) * cameraSpeed);
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		cam.pos += glm::normalize(glm::cross(cam.front, cam.up)) * cameraSpeed;
+		camera.Move(+glm::normalize(glm::cross(camera.GetFront(), camera.GetUp())) * cameraSpeed);
+
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-		cam.pos -= glm::vec3(0.0f, 1.0f, 0.0f) * cameraSpeed;
+		camera.Move(-glm::vec3(0.0f, 1.0f, 0.0f) * cameraSpeed);
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-		cam.pos += glm::vec3(0.0f, 1.0f, 0.0f) * cameraSpeed;
+		camera.Move(+glm::vec3(0.0f, 1.0f, 0.0f) * cameraSpeed);
 }
 
 void startGlfw() {
@@ -294,7 +235,7 @@ void createGlfwWindowSurface() {
 }
 
 void createLogicalDevice() {
-	auto physicalDevices = getPhysicalDevices();
+	auto physicalDevices = getPhysicalDevices(instance);
 
 	float queuePriorities[] = { 1.0f, 1.0f, 1.0f, 1.0f };
 
@@ -332,7 +273,7 @@ void initializeQueue() {
 }
 
 void validateSurfaceSupport() {
-	auto physicalDevices = getPhysicalDevices();
+	auto physicalDevices = getPhysicalDevices(instance);
 
 	VkBool32 surfaceSupport;
 	ASSERT_VK(vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevices[0], 0, surface, &surfaceSupport));
@@ -374,7 +315,7 @@ void createSwapchain() {
 }
 
 void createImageViews() {
-	uint32_t swapchainImageCount = getSwapchainImageCount();
+	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain);
 
 	std::vector<VkImage> swapchainImages;
 	swapchainImages.resize(swapchainImageCount);
@@ -477,8 +418,8 @@ void createPipeline() {
 	auto shaderCodeVert = readFile("Shaders/vert.spv");
 	auto shaderCodeFrag = readFile("Shaders/frag.spv");
 
-	createShaderModule(shaderCodeVert, &shaderModuleVert);
-	createShaderModule(shaderCodeFrag, &shaderModuleFrag);
+	createShaderModule(shaderCodeVert, &shaderModuleVert, device);
+	createShaderModule(shaderCodeFrag, &shaderModuleFrag, device);
 
 	VkPipelineShaderStageCreateInfo shaderStageCreateInfoVert;
 	shaderStageCreateInfoVert.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -547,8 +488,12 @@ void createPipeline() {
 	rasterizationCreateInfo.depthClampEnable = VK_FALSE;
 	rasterizationCreateInfo.rasterizerDiscardEnable = VK_FALSE;
 	rasterizationCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
+#ifdef _DEBUG
 	rasterizationCreateInfo.cullMode = VK_CULL_MODE_NONE;
-	rasterizationCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+#else
+	rasterizationCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
+#endif
+	rasterizationCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizationCreateInfo.depthBiasEnable = VK_FALSE;
 	rasterizationCreateInfo.depthBiasConstantFactor = VK_FALSE;
 	rasterizationCreateInfo.depthBiasClamp = 0.0f;
@@ -640,7 +585,7 @@ void createPipeline() {
 }
 
 void createFrameBuffers() {
-	uint32_t swapchainImageCount = getSwapchainImageCount();
+	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain);
 
 	frameBuffers.resize(swapchainImageCount);
 
@@ -671,7 +616,7 @@ void createCommandPool() {
 }
 
 void createCommandBuffers() {
-	uint32_t swapchainImageCount = getSwapchainImageCount();
+	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain);
 
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo;
 	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -685,132 +630,18 @@ void createCommandBuffers() {
 	ASSERT_VK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, commandBuffers.data()));
 }
 
-uint32_t findMemoryTypeIndex(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-	VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
-	vkGetPhysicalDeviceMemoryProperties(physicalDevices[0], &physicalDeviceMemoryProperties); //TODO civ
-
-	for (uint32_t i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; i++) {
-		if ((typeFilter & (1 << i)) && (physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-			return i;
-		}
-	}
-
-	std::cerr << "Found no correct memory type!";
-	throw std::runtime_error("Found no correct memory type!");
-}
-
-void createBuffer(VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags) {
-	VkBufferCreateInfo bufferCreateInfo;
-	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferCreateInfo.pNext = nullptr;
-	bufferCreateInfo.flags = 0;
-	bufferCreateInfo.size = bufferSize;
-	bufferCreateInfo.usage = bufferUsageFlags;
-	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	bufferCreateInfo.queueFamilyIndexCount = 0;
-	bufferCreateInfo.pQueueFamilyIndices = nullptr;
-
-	ASSERT_VK(vkCreateBuffer(device, &bufferCreateInfo, nullptr, &buffer));
-
-	VkMemoryRequirements memoryRequirements;
-	vkGetBufferMemoryRequirements(device, buffer, &memoryRequirements);
-
-	VkMemoryAllocateInfo memoryAllocateInfo;
-	memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	memoryAllocateInfo.pNext = nullptr;
-	memoryAllocateInfo.allocationSize = memoryRequirements.size;
-	memoryAllocateInfo.memoryTypeIndex = findMemoryTypeIndex(memoryRequirements.memoryTypeBits, memoryPropertyFlags);
-
-	ASSERT_VK(vkAllocateMemory(device, &memoryAllocateInfo, nullptr, &bufferDeviceMemory));
-	ASSERT_VK(vkBindBufferMemory(device, buffer, bufferDeviceMemory, 0));
-}
-
-void copyBuffer(VkBuffer& src, VkBuffer& dst, VkDeviceSize size) {
-
-	VkCommandBufferAllocateInfo commandBufferAllocateInfo;
-	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	commandBufferAllocateInfo.pNext = nullptr;
-	commandBufferAllocateInfo.commandPool = commandPool;
-	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	commandBufferAllocateInfo.commandBufferCount = 1;
-
-	VkCommandBuffer commandBuffer;
-	ASSERT_VK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer));
-
-	VkCommandBufferBeginInfo commandBufferBeginInfo;
-	commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	commandBufferBeginInfo.pNext = nullptr;
-	commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	commandBufferBeginInfo.pInheritanceInfo = nullptr;
-
-	ASSERT_VK(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
-
-	VkBufferCopy bufferCopy;
-	bufferCopy.srcOffset = 0;
-	bufferCopy.dstOffset = 0;
-	bufferCopy.size = size;
-	
-	vkCmdCopyBuffer(commandBuffer, src, dst, 1, &bufferCopy);
-
-	ASSERT_VK(vkEndCommandBuffer(commandBuffer));
-
-	VkSubmitInfo submitInfo;
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.pNext = nullptr;
-	submitInfo.waitSemaphoreCount = 0;
-	submitInfo.pWaitSemaphores = nullptr;
-	submitInfo.pWaitDstStageMask = nullptr;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-	submitInfo.signalSemaphoreCount = 0;
-	submitInfo.pSignalSemaphores = nullptr;
-
-	ASSERT_VK(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE)); //TODO use transfer only queue
-
-	vkQueueWaitIdle(queue);
-	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
-}
-
-template <typename T>
-void createAndUploadBuffer(std::vector<T> data, VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkBufferUsageFlags bufferUsageFlags) {
-	VkDeviceSize bufferSize = sizeof(T) * data.size();
-	
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-
-	createBuffer(stagingBuffer, stagingBufferMemory, bufferSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-	);
-
-	void* rawData;
-	ASSERT_VK(vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &rawData));
-	memcpy(rawData, data.data(), bufferSize);
-	vkUnmapMemory(device, stagingBufferMemory);
-
-	createBuffer(buffer, bufferDeviceMemory, bufferSize,
-		bufferUsageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-	);
-
-	copyBuffer(stagingBuffer, buffer, bufferSize);
-
-	vkDestroyBuffer(device, stagingBuffer, nullptr);
-	vkFreeMemory(device, stagingBufferMemory, nullptr);
-}
-
 void createVertexBuffer() {
-	createAndUploadBuffer(vertices, vertexBuffer, vertexBufferDeviceMemory, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+	createAndUploadBuffer(instance, device, queue, commandPool, vertices, vertexBuffer, vertexBufferDeviceMemory, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 }
 
 void createIndexBuffer() {
-	createAndUploadBuffer(indices, indexBuffer, indexBufferDeviceMemory, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+	createAndUploadBuffer(instance, device, queue, commandPool, indices, indexBuffer, indexBufferDeviceMemory, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
 
 void createUniformBuffer() {
 	VkDeviceSize bufferSize = sizeof(modelViewProj);
 
-	createBuffer(uniformBuffer, uniformBufferDeviceMemory, bufferSize,
+	createBuffer(instance, device, uniformBuffer, uniformBufferDeviceMemory, bufferSize,
 		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 	);
@@ -863,7 +694,7 @@ void createDescriptorSet() {
 }
 
 void recordCommandBuffers() {
-	uint32_t swapchainImageCount = getSwapchainImageCount();
+	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain);
 
 	VkCommandBufferBeginInfo commandBufferBeginInfo;
 	commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -937,7 +768,7 @@ void startVulkan() {
 	createInstance();
 	createGlfwWindowSurface();
 #ifdef _DEBUG
-	printPhysicalDevicesInfo();
+	printPhysicalDevicesInfo(instance, surface);
 #endif
 	createLogicalDevice();
 	initializeQueue();
@@ -1060,8 +891,8 @@ void updateModelViewProj() {
 
 	glm::mat4 model = glm::rotate(glm::mat4(1.0f), 0 * timeSinceStart * glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 	//glm::mat4 view = glm::lookAt(glm::vec3(camX, 1.0f, camZ), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	glm::mat4 view = glm::lookAt(cam.pos, cam.pos + cam.front, cam.up);
-	glm::mat4 proj = glm::perspective(glm::radians(cam.fov), windowWidth / (float)windowHeight, 0.01f, 100.0f);
+	glm::mat4 view = glm::lookAt(camera.GetPosition(), camera.GetPosition() + camera.GetFront(), camera.GetUp());
+	glm::mat4 proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight, 0.01f, 100.0f);
 
 	proj[1][1] *= -1; // Flip Y axis
 
@@ -1085,7 +916,7 @@ void updateDeltaTime() {
 		minDeletaTime = deltaTime;
 
 	glfwSetWindowTitle(window, (
-		std::string("Vulkan Tutorial | FOV: ") + std::to_string(cam.fov) +
+		std::string("Vulkan Tutorial | FOV: ") + std::to_string(camera.GetFOV()) +
 		std::string(" | FPS: ") + std::to_string(1.0f / deltaTime) +
 		std::string(" ( Min: ") + std::to_string(1.0f / maxDeltaTime) +
 		std::string(", Max: ") + std::to_string(1.0f / minDeletaTime) + std::string(" )")
@@ -1164,208 +995,3 @@ int main() {
 
 	return 0;
 }
-
-// Gleneral Helper Functions
-
-std::vector<char> readFile(const std::string& filePath) {
-	std::ifstream file(filePath, std::ios::binary | std::ios::ate);
-
-	if (file) {
-		size_t fileSize = (size_t)file.tellg();
-		std::vector<char> fileBuffer(fileSize);
-
-		file.seekg(0);
-		file.read(fileBuffer.data(), fileSize);
-		file.close();
-
-		return fileBuffer;
-	}
-
-	std::cerr << "Failed to open file: " << filePath;
-	throw std::runtime_error("Failed to open file!");
-}
-
-// Vulkan Helper Functions
-
-uint32_t getSwapchainImageCount() {
-	uint32_t swapchainImageCount;
-	ASSERT_VK(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr));
-
-	return swapchainImageCount;
-}
-
-std::vector< VkPhysicalDevice> getPhysicalDevices() {
-	if (physicalDevices.size() > 0) {
-		return physicalDevices;
-	} 
-
-	uint32_t physicalDeviceCount;
-	ASSERT_VK(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr));
-	physicalDevices.resize(physicalDeviceCount);
-	ASSERT_VK(vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices.data()));
-
-	return physicalDevices;
-}
-
-void createShaderModule(const std::vector<char>& code, VkShaderModule* shaderModule) {
-	VkShaderModuleCreateInfo shaderCreateInfo;
-	shaderCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderCreateInfo.pNext = nullptr;
-	shaderCreateInfo.flags = 0;
-	shaderCreateInfo.codeSize = code.size();
-	shaderCreateInfo.pCode = (uint32_t*)code.data();
-
-	ASSERT_VK(vkCreateShaderModule(device, &shaderCreateInfo, nullptr, shaderModule));
-}
-
-// Print Device Stats
-
-#ifdef _DEBUG
-void printLayerPropertiesInfo() {
-	uint32_t layerCount;
-	ASSERT_VK(vkEnumerateInstanceLayerProperties(&layerCount, nullptr));
-	std::vector< VkLayerProperties> layerProperties;
-	layerProperties.resize(layerCount);
-	ASSERT_VK(vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data()));
-
-	std::cout << "    --- Layer Information ---" << std::endl << std::endl;
-	std::cout << "Layer Count: " << layerCount << std::endl << std::endl;
-
-	for (int i = 0; i < layerCount; i++) {
-		std::cout << "Layer #" << i << ":" << std::endl;
-
-		std::cout << "\tName:                   " << layerProperties[i].layerName << std::endl;
-		std::cout << "\tDescription:            " << layerProperties[i].description << std::endl;
-		std::cout << "\tSpecification Version:  " << layerProperties[i].specVersion << std::endl;
-		std::cout << "\tImplementation Version: " << layerProperties[i].implementationVersion << std::endl;
-
-		std::cout << std::endl;
-	}
-}
-
-void printExtensionPropertiesInfo() {
-	uint32_t extensionCount;
-	ASSERT_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr));
-	std::vector< VkExtensionProperties> extensionProperties;
-	extensionProperties.resize(extensionCount);
-	ASSERT_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionProperties.data()));
-
-	std::cout << "    --- Extension Information ---" << std::endl << std::endl;
-	std::cout << "Extension Count: " << extensionCount << std::endl << std::endl;
-
-	for (int i = 0; i < extensionCount; i++) {
-		std::cout << "Extension #" << i << ":" << std::endl;
-
-		std::cout << "\tName:                   " << extensionProperties[i].extensionName << std::endl;
-		std::cout << "\tSpecification Version:  " << extensionProperties[i].specVersion << std::endl;
-
-		std::cout << std::endl;
-	}
-}
-
-void printPhysicalDevicesInfo() {
-	auto physicalDevices = getPhysicalDevices();
-
-	std::cout << "    --- Device Information ---" << std::endl << std::endl;
-	std::cout << "Device Count: " << physicalDevices.size() << std::endl << std::endl;
-
-	for (int i = 0; i < physicalDevices.size(); i++) {
-		VkPhysicalDeviceProperties properties;
-		vkGetPhysicalDeviceProperties(physicalDevices[i], &properties);
-
-		std::cout << "Device #" << i << ":" << std::endl;
-
-		std::cout << "\tProperties:" << std::endl;
-		std::cout << "\t\tName:    " << properties.deviceName << std::endl;
-		std::cout << "\t\tType:    " << properties.deviceType << std::endl;
-		std::cout << "\t\tAPI Version:    " << VERION_STR_VK(properties.apiVersion) << std::endl;
-		std::cout << "\t\tDriver Version: " << properties.driverVersion << std::endl;
-		std::cout << "\t\tVendor ID:      " << properties.vendorID << std::endl;
-		std::cout << "\t\tDevice ID:      " << properties.deviceID << std::endl;
-
-		std::cout << std::endl;
-
-		std::cout << "\t\tDiscrete Queue Priorites: " << properties.limits.discreteQueuePriorities << std::endl;
-
-		VkPhysicalDeviceFeatures features;
-		vkGetPhysicalDeviceFeatures(physicalDevices[i], &features);
-
-		std::cout << "\tFeatures:" << std::endl;
-		std::cout << "\t\tGeometry Shader:     " << (features.geometryShader ? "Yes" : "No") << std::endl;
-		std::cout << "\t\tTessellation Shader: " << (features.tessellationShader ? "Yes" : "No") << std::endl;
-
-		uint32_t queueFamilyCount;
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevices[i], &queueFamilyCount, nullptr);
-		std::vector< VkQueueFamilyProperties>queueFamilyProperties;
-		queueFamilyProperties.resize(queueFamilyCount);
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevices[i], &queueFamilyCount, queueFamilyProperties.data());
-
-		std::cout << "\tQueue Properties:" << std::endl;
-		std::cout << "\t\tFamily Count: " << queueFamilyCount << std::endl;
-
-		for (int i = 0; i < queueFamilyCount; i++) {
-			std::cout << std::endl;
-			std::cout << "\t\tQueue Family #" << i << ":" << std::endl;
-						  
-			std::cout << "\t\t\tGraphics:        " << YES_NO_BIT(queueFamilyProperties[i].queueFlags, VK_QUEUE_GRAPHICS_BIT) << std::endl;
-			std::cout << "\t\t\tCompute:         " << YES_NO_BIT(queueFamilyProperties[i].queueFlags, VK_QUEUE_COMPUTE_BIT) << std::endl;
-			std::cout << "\t\t\tTransfer:        " << YES_NO_BIT(queueFamilyProperties[i].queueFlags, VK_QUEUE_TRANSFER_BIT) << std::endl;
-			std::cout << "\t\t\tSparse Binding:  " << YES_NO_BIT(queueFamilyProperties[i].queueFlags, VK_QUEUE_SPARSE_BINDING_BIT) << std::endl;
-			std::cout << "\t\t\tProtected:       " << YES_NO_BIT(queueFamilyProperties[i].queueFlags, VK_QUEUE_PROTECTED_BIT) << std::endl;
-
-			std::cout << std::endl;
-
-			std::cout << "\t\t\tQueue Count:                    " << queueFamilyProperties[i].queueCount << std::endl;
-			std::cout << "\t\t\tTimestamp Bits:                 " << queueFamilyProperties[i].timestampValidBits << std::endl;
-			std::cout << "\t\t\tMin Image Transfer Granularity: "
-				<< queueFamilyProperties[i].minImageTransferGranularity.width << ", "
-				<< queueFamilyProperties[i].minImageTransferGranularity.height << ", "
-				<< queueFamilyProperties[i].minImageTransferGranularity.depth << std::endl;
-		}
-
-		VkSurfaceCapabilitiesKHR surfaceCapabilities;
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevices[i], surface, &surfaceCapabilities);
-
-		std::cout << "\tSurface Capabilities:" << std::endl;
-
-		std::cout << "\t\tMin Image Count: " << surfaceCapabilities.minImageCount << std::endl;
-		std::cout << "\t\tMax Image Count: " << surfaceCapabilities.maxImageCount << std::endl;
-		std::cout << "\t\tCurrent Extent: " << surfaceCapabilities.currentExtent.width << ", " << surfaceCapabilities.currentExtent.height << std::endl;
-		std::cout << "\t\tMin Image Extent: " << surfaceCapabilities.minImageExtent.width << ", " << surfaceCapabilities.minImageExtent.height << std::endl;
-		std::cout << "\t\tMax Image Extent: " << surfaceCapabilities.maxImageExtent.width << ", " << surfaceCapabilities.maxImageExtent.height << std::endl;
-		std::cout << "\t\tMax Image Array Layers: " << surfaceCapabilities.maxImageArrayLayers << std::endl;
-		std::cout << "\t\tSupported Transforms: " << surfaceCapabilities.supportedTransforms << std::endl;
-		std::cout << "\t\tCurrent Transform: " << surfaceCapabilities.currentTransform << std::endl;
-		std::cout << "\t\tSupported Composite Alpha: " << surfaceCapabilities.supportedCompositeAlpha << std::endl;
-		std::cout << "\t\tSupported Usage Flags: " << surfaceCapabilities.supportedUsageFlags << std::endl;
-
-		uint32_t surfaceFormatCount;
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevices[i], surface, &surfaceFormatCount, nullptr);
-		std::vector<VkSurfaceFormatKHR> surfaceFormats;
-		surfaceFormats.resize(surfaceFormatCount);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevices[i], surface, &surfaceFormatCount, surfaceFormats.data());
-
-		std::cout << "\tSurface Formats:" << std::endl << "\t\t";
-
-		for (auto surfaceFormat : surfaceFormats) {
-			std::cout << surfaceFormat.format << " ";
-		}
-
-		std::cout << std::endl;
-
-		uint32_t surfacePresentationModeCount;
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevices[i], surface, &surfacePresentationModeCount, nullptr);
-		std::vector<VkPresentModeKHR> surfacePresentationModes;
-		surfacePresentationModes.resize(surfacePresentationModeCount);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevices[i], surface, &surfacePresentationModeCount, surfacePresentationModes.data());
-
-		std::cout << "\tSurface Presentation Modes:" << std::endl << "\t\t";
-
-		for (auto surfacePresentationMode : surfacePresentationModes) {
-			std::cout << surfacePresentationMode << " ";
-		}
-
-		std::cout << std::endl;
-	}
-}
-#endif

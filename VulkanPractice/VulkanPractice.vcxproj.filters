@@ -18,9 +18,24 @@
     <ClCompile Include="VulkanPractice.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="VulkanUtils.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\frag.spv" />
     <None Include="Shaders\vert.spv" />
+    <None Include="VulkanUtils.tpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="VulkanUtils.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
