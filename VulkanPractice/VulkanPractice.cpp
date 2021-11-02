@@ -74,7 +74,9 @@ VkPipeline pipeline;
 VkCommandPool commandPool;
 
 VkBuffer vertexBuffer;
+VkBuffer indexBuffer;
 VkDeviceMemory vertexBufferDeviceMemory;
+VkDeviceMemory indexBufferDeviceMemory;
 
 VkSemaphore semaphoreImageAvailable;
 VkSemaphore semaphoreRenderingDone;
@@ -119,9 +121,16 @@ public:
 };
 
 std::vector<Vertex> vertices = {
-	Vertex({  0.0f, -0.5f }, { 1.0f, 0.0f, 1.0f }),
-	Vertex({  0.5f,  0.5f }, { 0.0f, 1.0f, 0.0f }),
-	Vertex({ -0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f })
+	Vertex({ -0.5f, -0.5f }, { 1.0f, 0.0f, 1.0f }), // 0 Top Left
+	Vertex({  0.5f, -0.5f }, { 0.0f, 0.0f, 1.0f }), // 1 Top Right
+	Vertex({ -0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f }), // 2 Bottom Left
+	Vertex({  0.5f,  0.5f }, { 0.0f, 1.0f, 0.0f }), // 3 Bottom Right
+
+};
+
+std::vector<uint32_t> indices = {
+	0, 3, 2,
+	0, 1, 3
 };
 
 void onWindowResized(GLFWwindow * window, int width, int height) {
@@ -647,10 +656,10 @@ void copyBuffer(VkBuffer& src, VkBuffer& dst, VkDeviceSize size) {
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
-void createVertexBuffer() {
-
-	VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
-
+template <typename T>
+void createAndUploadBuffer(std::vector<T> data, VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkBufferUsageFlags bufferUsageFlags) {
+	VkDeviceSize bufferSize = sizeof(T) * data.size();
+	
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 
@@ -661,18 +670,26 @@ void createVertexBuffer() {
 
 	void* rawData;
 	ASSERT_VK(vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &rawData));
-	memcpy(rawData, vertices.data(), bufferSize);
+	memcpy(rawData, data.data(), bufferSize);
 	vkUnmapMemory(device, stagingBufferMemory);
 
-	createBuffer(vertexBuffer, vertexBufferDeviceMemory, bufferSize,
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	createBuffer(buffer, bufferDeviceMemory, bufferSize,
+		bufferUsageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
 	);
 
-	copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+	copyBuffer(stagingBuffer, buffer, bufferSize);
 
 	vkDestroyBuffer(device, stagingBuffer, nullptr);
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
+}
+
+void createVertexBuffer() {
+	createAndUploadBuffer(vertices, vertexBuffer, vertexBufferDeviceMemory, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+}
+
+void createIndexBuffer() {
+	createAndUploadBuffer(indices, indexBuffer, indexBufferDeviceMemory, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
 
 void recordCommandBuffers() {
@@ -719,8 +736,10 @@ void recordCommandBuffers() {
 
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffer, offsets);
+		vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+		//vkCmdDraw(commandBuffers[i], vertices.size(), 1, 0, 0);
+		vkCmdDrawIndexed(commandBuffers[i], indices.size(), 1, 0, 0, 0);
 
 		vkCmdEndRenderPass(commandBuffers[i]);
 
@@ -768,6 +787,7 @@ void startVulkan() {
 	createCommandPool();
 	createCommandBuffers();
 	createVertexBuffer();
+	createIndexBuffer();
 	recordCommandBuffers();
 
 	createSemaphores();
@@ -877,6 +897,8 @@ void shutdownVulkan() {
 
 	vkFreeMemory(device, vertexBufferDeviceMemory, nullptr);
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
+	vkFreeMemory(device, indexBufferDeviceMemory, nullptr);
+	vkDestroyBuffer(device, indexBuffer, nullptr);
 
 	vkDestroyCommandPool(device, commandPool, nullptr);
 
