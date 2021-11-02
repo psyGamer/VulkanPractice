@@ -173,8 +173,10 @@
     <ClCompile Include="VulkanPractice.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\shader.frag" />
-    <None Include="Shaders\shader.vert" />
+    <None Include="Shaders\frag.spv">
+      <FileType>Text</FileType>
+    </None>
+    <None Include="Shaders\vert.spv" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

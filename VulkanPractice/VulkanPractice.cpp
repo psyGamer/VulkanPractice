@@ -4,6 +4,9 @@
 
 #include <fstream>
 
+#include <stdlib.h>
+#include <time.h>
+
 #pragma warning(disable : 26812)
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -116,7 +119,7 @@ public:
 };
 
 std::vector<Vertex> vertices = {
-	Vertex({  0.0f, -0.5f }, { 1.0f, 0.0f, 0.0f }),
+	Vertex({  0.0f, -0.5f }, { 1.0f, 0.0f, 1.0f }),
 	Vertex({  0.5f,  0.5f }, { 0.0f, 1.0f, 0.0f }),
 	Vertex({ -0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f })
 };
@@ -568,42 +571,108 @@ uint32_t findMemoryTypeIndex(uint32_t typeFilter, VkMemoryPropertyFlags properti
 		}
 	}
 
+	std::cerr << "Found no correct memory type!";
 	throw std::runtime_error("Found no correct memory type!");
 }
 
-void createVertexBuffer() {
+void createBuffer(VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags) {
 	VkBufferCreateInfo bufferCreateInfo;
 	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferCreateInfo.pNext = nullptr;
 	bufferCreateInfo.flags = 0;
-	bufferCreateInfo.size = sizeof(Vertex) * vertices.size();
-	bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	bufferCreateInfo.size = bufferSize;
+	bufferCreateInfo.usage = bufferUsageFlags;
 	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	bufferCreateInfo.queueFamilyIndexCount = 0;
 	bufferCreateInfo.pQueueFamilyIndices = nullptr;
 
-	ASSERT_VK(vkCreateBuffer(device, &bufferCreateInfo, nullptr, &vertexBuffer));
+	ASSERT_VK(vkCreateBuffer(device, &bufferCreateInfo, nullptr, &buffer));
 
 	VkMemoryRequirements memoryRequirements;
-	vkGetBufferMemoryRequirements(device, vertexBuffer, &memoryRequirements);
+	vkGetBufferMemoryRequirements(device, buffer, &memoryRequirements);
 
 	VkMemoryAllocateInfo memoryAllocateInfo;
 	memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memoryAllocateInfo.pNext = nullptr;
 	memoryAllocateInfo.allocationSize = memoryRequirements.size;
-	memoryAllocateInfo.memoryTypeIndex = findMemoryTypeIndex(memoryRequirements.memoryTypeBits, 
+	memoryAllocateInfo.memoryTypeIndex = findMemoryTypeIndex(memoryRequirements.memoryTypeBits, memoryPropertyFlags);
+
+	ASSERT_VK(vkAllocateMemory(device, &memoryAllocateInfo, nullptr, &bufferDeviceMemory));
+	ASSERT_VK(vkBindBufferMemory(device, buffer, bufferDeviceMemory, 0));
+}
+
+void copyBuffer(VkBuffer& src, VkBuffer& dst, VkDeviceSize size) {
+
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo;
+	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferAllocateInfo.pNext = nullptr;
+	commandBufferAllocateInfo.commandPool = commandPool;
+	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferAllocateInfo.commandBufferCount = 1;
+
+	VkCommandBuffer commandBuffer;
+	ASSERT_VK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer));
+
+	VkCommandBufferBeginInfo commandBufferBeginInfo;
+	commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufferBeginInfo.pNext = nullptr;
+	commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	commandBufferBeginInfo.pInheritanceInfo = nullptr;
+
+	ASSERT_VK(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
+
+	VkBufferCopy bufferCopy;
+	bufferCopy.srcOffset = 0;
+	bufferCopy.dstOffset = 0;
+	bufferCopy.size = size;
+	
+	vkCmdCopyBuffer(commandBuffer, src, dst, 1, &bufferCopy);
+
+	ASSERT_VK(vkEndCommandBuffer(commandBuffer));
+
+	VkSubmitInfo submitInfo;
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+
+	ASSERT_VK(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE)); //TODO use transfer only queue
+
+	vkQueueWaitIdle(queue);
+	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+
+void createVertexBuffer() {
+
+	VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+
+	createBuffer(stagingBuffer, stagingBufferMemory, bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 	);
 
-	ASSERT_VK(vkAllocateMemory(device, &memoryAllocateInfo, nullptr, &vertexBufferDeviceMemory));
-	ASSERT_VK(vkBindBufferMemory(device, vertexBuffer, vertexBufferDeviceMemory, 0));
-
 	void* rawData;
-	ASSERT_VK(vkMapMemory(device, vertexBufferDeviceMemory, 0, bufferCreateInfo.size, 0, &rawData));
+	ASSERT_VK(vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &rawData));
+	memcpy(rawData, vertices.data(), bufferSize);
+	vkUnmapMemory(device, stagingBufferMemory);
 
-	memcpy(rawData, vertices.data(), bufferCreateInfo.size);
+	createBuffer(vertexBuffer, vertexBufferDeviceMemory, bufferSize,
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+	);
 
-	vkUnmapMemory(device, vertexBufferDeviceMemory);
+	copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
 void recordCommandBuffers() {
@@ -690,6 +759,12 @@ void startVulkan() {
 	createPipeline();
 	createFrameBuffers();
 
+	for (auto& vertex : vertices) {
+		vertex.color.r = (float)(rand() % 255) / 255.0f;
+		vertex.color.g = (float)(rand() % 255) / 255.0f;
+		vertex.color.b = (float)(rand() % 255) / 255.0f;
+	}
+
 	createCommandPool();
 	createCommandBuffers();
 	createVertexBuffer();
@@ -763,6 +838,9 @@ void drawFrame() {
 	ASSERT_VK(vkQueuePresentKHR(queue, &presentInfo));
 }
 
+float maxDeltaTime = std::numeric_limits<float>::min();
+float minDeletaTime = std::numeric_limits<float>::max();
+
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
@@ -776,7 +854,16 @@ void gameLoop() {
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 
-		glfwSetWindowTitle(window, (std::string("Vulkan Tutorial | FPS: ") + std::to_string(1.0f / deltaTime)).c_str());
+		if (deltaTime > maxDeltaTime)
+			maxDeltaTime = deltaTime;
+		if (deltaTime < minDeletaTime)
+			minDeletaTime = deltaTime;
+
+		glfwSetWindowTitle(window, (
+			std::string("Vulkan Tutorial | FPS: ") + std::to_string(1.0f / deltaTime) + 
+			std::string(" ( Min: ") + std::to_string(1.0f / maxDeltaTime) +
+			std::string(", Max: ") + std::to_string(1.0f / minDeletaTime) + std::string(" )")
+		).c_str());
 	}
 }
 
@@ -821,6 +908,7 @@ void shutdownGlfw() {
 }
 
 int main() {
+	srand(time(NULL));
 	
 	startGlfw();
 	startVulkan();
@@ -849,6 +937,7 @@ std::vector<char> readFile(const std::string& filePath) {
 		return fileBuffer;
 	}
 
+	std::cerr << "Failed to open file: " << filePath;
 	throw std::runtime_error("Failed to open file!");
 }
 
