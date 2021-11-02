@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include <fstream>
 
@@ -13,6 +14,7 @@
 //#include <vulkan/vulkan.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 // Ensures that VkResult is VK_SUCCESS
 #ifndef ASSERT_VK 
@@ -75,8 +77,14 @@ VkCommandPool commandPool;
 
 VkBuffer vertexBuffer;
 VkBuffer indexBuffer;
+VkBuffer uniformBuffer;
 VkDeviceMemory vertexBufferDeviceMemory;
 VkDeviceMemory indexBufferDeviceMemory;
+VkDeviceMemory uniformBufferDeviceMemory;
+
+VkDescriptorSetLayout descriptorSetLayout;
+VkDescriptorPool descriptorPool;
+VkDescriptorSet descriptorSet;
 
 VkSemaphore semaphoreImageAvailable;
 VkSemaphore semaphoreRenderingDone;
@@ -120,12 +128,15 @@ public:
 	}
 };
 
-std::vector<Vertex> vertices = {
-	Vertex({ -0.5f, -0.5f }, { 1.0f, 0.0f, 1.0f }), // 0 Top Left
-	Vertex({  0.5f, -0.5f }, { 0.0f, 0.0f, 1.0f }), // 1 Top Right
-	Vertex({ -0.5f,  0.5f }, { 0.0f, 0.0f, 1.0f }), // 2 Bottom Left
-	Vertex({  0.5f,  0.5f }, { 0.0f, 1.0f, 0.0f }), // 3 Bottom Right
+const float squreSize = .5f;
 
+glm::mat4 modelViewProj;
+
+std::vector<Vertex> vertices = {
+	Vertex(glm::vec2{ -1.0f, -1.0f } * squreSize, { 1.0f, 0.0f, 1.0f }), // 0 Top Left
+	Vertex(glm::vec2{  1.0f, -1.0f } * squreSize, { 0.0f, 0.0f, 1.0f }), // 1 Top Right
+	Vertex(glm::vec2{ -1.0f,  1.0f } * squreSize, { 0.0f, 0.0f, 1.0f }), // 2 Bottom Left
+	Vertex(glm::vec2{  1.0f,  1.0f } * squreSize, { 0.0f, 1.0f, 0.0f }), // 3 Bottom Right
 };
 
 std::vector<uint32_t> indices = {
@@ -358,6 +369,24 @@ void createRenderPass() {
 	ASSERT_VK(vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass));
 }
 
+void createDescriptorSetLayout() {
+	VkDescriptorSetLayoutBinding descriptorSetLayoutBinding;
+	descriptorSetLayoutBinding.binding = 0;
+	descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorSetLayoutBinding.descriptorCount = 1;
+	descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	descriptorSetLayoutBinding.pImmutableSamplers = nullptr;
+
+	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo;
+	descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	descriptorSetLayoutCreateInfo.pNext = nullptr;
+	descriptorSetLayoutCreateInfo.flags = 0;
+	descriptorSetLayoutCreateInfo.bindingCount = 1;
+	descriptorSetLayoutCreateInfo.pBindings = &descriptorSetLayoutBinding;
+
+	ASSERT_VK(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, nullptr, &descriptorSetLayout));
+}
+
 void createPipeline() {
 	auto shaderCodeVert = readFile("Shaders/vert.spv");
 	auto shaderCodeFrag = readFile("Shaders/frag.spv");
@@ -433,7 +462,7 @@ void createPipeline() {
 	rasterizationCreateInfo.rasterizerDiscardEnable = VK_FALSE;
 	rasterizationCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizationCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizationCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizationCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizationCreateInfo.depthBiasEnable = VK_FALSE;
 	rasterizationCreateInfo.depthBiasConstantFactor = VK_FALSE;
 	rasterizationCreateInfo.depthBiasClamp = 0.0f;
@@ -481,8 +510,8 @@ void createPipeline() {
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	layoutCreateInfo.pNext = nullptr;
 	layoutCreateInfo.flags = 0;
-	layoutCreateInfo.setLayoutCount = 0;
-	layoutCreateInfo.pSetLayouts = nullptr;
+	layoutCreateInfo.setLayoutCount = 1;
+	layoutCreateInfo.pSetLayouts = &descriptorSetLayout;
 	layoutCreateInfo.pushConstantRangeCount = 0;
 	layoutCreateInfo.pPushConstantRanges = nullptr;
 
@@ -692,6 +721,61 @@ void createIndexBuffer() {
 	createAndUploadBuffer(indices, indexBuffer, indexBufferDeviceMemory, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
 
+void createUniformBuffer() {
+	VkDeviceSize bufferSize = sizeof(modelViewProj);
+
+	createBuffer(uniformBuffer, uniformBufferDeviceMemory, bufferSize,
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+	);
+}
+
+void createDescriptorPool() {
+	VkDescriptorPoolSize descriptorPoolSize;
+	descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorPoolSize.descriptorCount = 1;
+
+	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo;
+	descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	descriptorPoolCreateInfo.pNext = nullptr;
+	descriptorPoolCreateInfo.flags = 0;
+	descriptorPoolCreateInfo.maxSets = 1;
+	descriptorPoolCreateInfo.poolSizeCount = 1;
+	descriptorPoolCreateInfo.pPoolSizes = &descriptorPoolSize;
+	
+	ASSERT_VK(vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, nullptr, &descriptorPool));
+}
+
+void createDescriptorSet() {
+	VkDescriptorSetAllocateInfo descriptorSetAllocateInfo;
+	descriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	descriptorSetAllocateInfo.pNext = nullptr;
+	descriptorSetAllocateInfo.descriptorPool = descriptorPool;
+	descriptorSetAllocateInfo.descriptorSetCount = 1;
+	descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
+
+	ASSERT_VK(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet));
+
+	VkDescriptorBufferInfo descriptorBufferInfo;
+	descriptorBufferInfo.buffer = uniformBuffer;
+	descriptorBufferInfo.offset = 0;
+	descriptorBufferInfo.range = sizeof(modelViewProj);
+
+	VkWriteDescriptorSet writeDescriptorSet;
+	writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writeDescriptorSet.pNext = nullptr;
+	writeDescriptorSet.dstSet = descriptorSet;
+	writeDescriptorSet.dstBinding = 0;
+	writeDescriptorSet.dstArrayElement = 0;
+	writeDescriptorSet.descriptorCount = 1;
+	writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	writeDescriptorSet.pImageInfo = nullptr;
+	writeDescriptorSet.pBufferInfo = &descriptorBufferInfo;
+	writeDescriptorSet.pTexelBufferView = nullptr;
+
+	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+}
+
 void recordCommandBuffers() {
 	uint32_t swapchainImageCount = getSwapchainImageCount();
 
@@ -738,6 +822,8 @@ void recordCommandBuffers() {
 		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffer, offsets);
 		vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
+		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+
 		//vkCmdDraw(commandBuffers[i], vertices.size(), 1, 0, 0);
 		vkCmdDrawIndexed(commandBuffers[i], indices.size(), 1, 0, 0, 0);
 
@@ -775,6 +861,9 @@ void startVulkan() {
 	createSwapchain();
 	createImageViews();
 	createRenderPass();
+
+	createDescriptorSetLayout();
+
 	createPipeline();
 	createFrameBuffers();
 
@@ -786,8 +875,13 @@ void startVulkan() {
 
 	createCommandPool();
 	createCommandBuffers();
+
 	createVertexBuffer();
 	createIndexBuffer();
+	createUniformBuffer();
+	createDescriptorPool();
+	createDescriptorSet();
+
 	recordCommandBuffers();
 
 	createSemaphores();
@@ -858,11 +952,50 @@ void drawFrame() {
 	ASSERT_VK(vkQueuePresentKHR(queue, &presentInfo));
 }
 
+auto gameStartTime = std::chrono::high_resolution_clock::now();
+auto lastFrameTime = std::chrono::high_resolution_clock::now();
+
+float deltaTime = 0.0f;
+
 float maxDeltaTime = std::numeric_limits<float>::min();
 float minDeletaTime = std::numeric_limits<float>::max();
 
-float deltaTime = 0.0f;
-float lastFrame = 0.0f;
+void updateModelViewProj() {
+	auto currentFrameTime = std::chrono::high_resolution_clock::now();
+
+	float timeSinceStart = std::chrono::duration_cast<std::chrono::milliseconds>(currentFrameTime - gameStartTime).count() / 1000.0f;
+
+	glm::mat4 model = glm::rotate(glm::mat4(1.0f), timeSinceStart * glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::mat4 view = glm::lookAt(glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::mat4 proj = glm::perspective(glm::radians(60.0f), windowWidth / (float)windowHeight, 0.01f, 10.0f);
+
+	proj[1][1] *= -1; // Flip Y axis
+
+	modelViewProj = proj * view * model;
+
+	void* rawData;
+	ASSERT_VK(vkMapMemory(device, uniformBufferDeviceMemory, 0, sizeof(modelViewProj), 0, &rawData));
+	memcpy(rawData, &modelViewProj, sizeof(modelViewProj));
+	vkUnmapMemory(device, uniformBufferDeviceMemory);
+}
+
+void updateDeltaTime() {
+	auto currentFrameTime = std::chrono::high_resolution_clock::now();
+
+	deltaTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentFrameTime - lastFrameTime).count() / 1000.0f;
+	lastFrameTime = currentFrameTime;
+
+	if (deltaTime > maxDeltaTime)
+		maxDeltaTime = deltaTime;
+	if (deltaTime < minDeletaTime)
+		minDeletaTime = deltaTime;
+
+	glfwSetWindowTitle(window, (
+		std::string("Vulkan Tutorial | FPS: ") + std::to_string(1.0f / deltaTime) +
+		std::string(" ( Min: ") + std::to_string(1.0f / maxDeltaTime) +
+		std::string(", Max: ") + std::to_string(1.0f / minDeletaTime) + std::string(" )")
+		).c_str());
+}
 
 void gameLoop() {
 	while (!glfwWindowShouldClose(window)) {
@@ -870,20 +1003,8 @@ void gameLoop() {
 
 		drawFrame();
 
-		float currentFrame = glfwGetTime();
-		deltaTime = currentFrame - lastFrame;
-		lastFrame = currentFrame;
-
-		if (deltaTime > maxDeltaTime)
-			maxDeltaTime = deltaTime;
-		if (deltaTime < minDeletaTime)
-			minDeletaTime = deltaTime;
-
-		glfwSetWindowTitle(window, (
-			std::string("Vulkan Tutorial | FPS: ") + std::to_string(1.0f / deltaTime) + 
-			std::string(" ( Min: ") + std::to_string(1.0f / maxDeltaTime) +
-			std::string(", Max: ") + std::to_string(1.0f / minDeletaTime) + std::string(" )")
-		).c_str());
+		updateDeltaTime();
+		updateModelViewProj();
 	}
 }
 
@@ -895,6 +1016,10 @@ void shutdownVulkan() {
 
 	//vkFreeCommandBuffers(device, commandPool, swapchainImageCount, commandBuffers.data()) Automaticly freed with the command pool
 
+	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+	
+	vkFreeMemory(device, uniformBufferDeviceMemory, nullptr);
+	vkDestroyBuffer(device, uniformBuffer, nullptr);
 	vkFreeMemory(device, vertexBufferDeviceMemory, nullptr);
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
 	vkFreeMemory(device, indexBufferDeviceMemory, nullptr);
@@ -907,6 +1032,8 @@ void shutdownVulkan() {
 	}
 
 	vkDestroyPipeline(device, pipeline, nullptr);
+
+	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 	vkDestroyRenderPass(device, renderPass, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
