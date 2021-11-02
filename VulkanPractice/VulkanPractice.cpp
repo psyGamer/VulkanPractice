@@ -9,6 +9,7 @@
 #include "VulkanUtils.h"
 #include "Camera.h"
 #include "Image.h"
+#include "Vertex.h"
 
 void recreateSwapchain();
 
@@ -53,50 +54,17 @@ GLFWwindow* window;
 
 uint32_t windowWidth = 800, windowHeight = 600;
 
+glm::mat4 modelViewProj;
+
 const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
-
-class Vertex {
-public:
-	glm::vec2 pos;
-	glm::vec3 color;
-
-	Vertex(glm::vec2 pos, glm::vec3 color)
-		: pos(pos), color(color) { }
-
-	static VkVertexInputBindingDescription getBindingDescription() {
-		VkVertexInputBindingDescription bindingDescription;
-		bindingDescription.binding = 0;
-		bindingDescription.stride = sizeof(Vertex);
-		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-		return bindingDescription;
-	}
-
-	static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions() {
-		std::vector<VkVertexInputAttributeDescription> attributeDescriptions(2);
-		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].binding = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[0].offset = offsetof(Vertex, pos);
-
-		attributeDescriptions[1].location = 1;
-		attributeDescriptions[1].binding = 0;
-		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-		return attributeDescriptions;
-	}
-};
 
 const float squreSize = .5f;
 
-glm::mat4 modelViewProj;
-
 std::vector<Vertex> vertices = {
-	Vertex(glm::vec2{ -1.0f, -1.0f } * squreSize, { 1.0f, 0.0f, 1.0f }), // 0 Top Left
-	Vertex(glm::vec2{  1.0f, -1.0f } * squreSize, { 0.0f, 0.0f, 1.0f }), // 1 Top Right
-	Vertex(glm::vec2{ -1.0f,  1.0f } * squreSize, { 0.0f, 0.0f, 1.0f }), // 2 Bottom Left
-	Vertex(glm::vec2{  1.0f,  1.0f } * squreSize, { 0.0f, 1.0f, 0.0f }), // 3 Bottom Right
+	Vertex(glm::vec2{ -1.0f, -1.0f } * squreSize, { 0.0f, 0.0f }, { 1.0f, 0.0f, 1.0f }), // 0 Top Left
+	Vertex(glm::vec2{  1.0f, -1.0f } * squreSize, { 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }), // 1 Top Right
+	Vertex(glm::vec2{ -1.0f,  1.0f } * squreSize, { 0.0f, 1.0f }, { 0.0f, 0.0f, 1.0f }), // 2 Bottom Left
+	Vertex(glm::vec2{  1.0f,  1.0f } * squreSize, { 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f }), // 3 Bottom Right
 };
 
 std::vector<uint32_t> indices = {
@@ -250,6 +218,7 @@ void createLogicalDevice() {
 	deviceQueueCreateInfo.pQueuePriorities = queuePriorities;
 
 	VkPhysicalDeviceFeatures usedFeatures{ };
+	usedFeatures.samplerAnisotropy = VK_TRUE;
 
 	const std::vector<const char*> enabledDeviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -399,19 +368,30 @@ void createRenderPass() {
 }
 
 void createDescriptorSetLayout() {
-	VkDescriptorSetLayoutBinding descriptorSetLayoutBinding;
-	descriptorSetLayoutBinding.binding = 0;
-	descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descriptorSetLayoutBinding.descriptorCount = 1;
-	descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	descriptorSetLayoutBinding.pImmutableSamplers = nullptr;
+	std::vector<VkDescriptorSetLayoutBinding> descriptorSetLayoutBindings;
+
+	VkDescriptorSetLayoutBinding modelViewProjDescriptorSetLayoutBinding;
+	modelViewProjDescriptorSetLayoutBinding.binding = 0;
+	modelViewProjDescriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	modelViewProjDescriptorSetLayoutBinding.descriptorCount = 1;
+	modelViewProjDescriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	modelViewProjDescriptorSetLayoutBinding.pImmutableSamplers = nullptr;
+	descriptorSetLayoutBindings.push_back(modelViewProjDescriptorSetLayoutBinding);
+
+	VkDescriptorSetLayoutBinding samplerDescriptorSetLayoutBinding;
+	samplerDescriptorSetLayoutBinding.binding = 1;
+	samplerDescriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerDescriptorSetLayoutBinding.descriptorCount = 1;
+	samplerDescriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	samplerDescriptorSetLayoutBinding.pImmutableSamplers = nullptr;
+	descriptorSetLayoutBindings.push_back(samplerDescriptorSetLayoutBinding);
 
 	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo;
 	descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	descriptorSetLayoutCreateInfo.pNext = nullptr;
 	descriptorSetLayoutCreateInfo.flags = 0;
-	descriptorSetLayoutCreateInfo.bindingCount = 1;
-	descriptorSetLayoutCreateInfo.pBindings = &descriptorSetLayoutBinding;
+	descriptorSetLayoutCreateInfo.bindingCount = descriptorSetLayoutBindings.size();
+	descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings.data();
 
 	ASSERT_VK(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, nullptr, &descriptorSetLayout));
 }
@@ -634,41 +614,46 @@ void createCommandBuffers() {
 
 void loadTexture() {
 	diamondImage.LoadImage("Assets/diamond_block.png");
-
-	std::cout << diamondImage.GetWidth() << std::endl;
-	std::cout << diamondImage.GetHeight() << std::endl;
-	std::cout << diamondImage.GetSizeInBytes() << std::endl;
+	diamondImage.Upload(device, getPhysicalDevices(instance)[0], commandPool, queue);
 }
 
 void createVertexBuffer() {
-	createAndUploadBuffer(instance, device, queue, commandPool, vertices, vertexBuffer, vertexBufferDeviceMemory, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+	createAndUploadBuffer(device, getPhysicalDevices(instance)[0], queue, commandPool, vertices, vertexBuffer, vertexBufferDeviceMemory, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 }
 
 void createIndexBuffer() {
-	createAndUploadBuffer(instance, device, queue, commandPool, indices, indexBuffer, indexBufferDeviceMemory, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+	createAndUploadBuffer(device, getPhysicalDevices(instance)[0], queue, commandPool, indices, indexBuffer, indexBufferDeviceMemory, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
 
 void createUniformBuffer() {
 	VkDeviceSize bufferSize = sizeof(modelViewProj);
 
-	createBuffer(instance, device, uniformBuffer, uniformBufferDeviceMemory, bufferSize,
+	createBuffer(device, getPhysicalDevices(instance)[0], uniformBuffer, uniformBufferDeviceMemory, bufferSize,
 		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 	);
 }
 
 void createDescriptorPool() {
-	VkDescriptorPoolSize descriptorPoolSize;
-	descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descriptorPoolSize.descriptorCount = 1;
+	std::vector<VkDescriptorPoolSize> descriptorPoolSizes;
+
+	VkDescriptorPoolSize modelViewProjDescriptorPoolSize;
+	modelViewProjDescriptorPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	modelViewProjDescriptorPoolSize.descriptorCount = 1;
+	descriptorPoolSizes.push_back(modelViewProjDescriptorPoolSize);
+
+	VkDescriptorPoolSize samplerDescriptorPoolSize;
+	samplerDescriptorPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerDescriptorPoolSize.descriptorCount = 1;
+	descriptorPoolSizes.push_back(samplerDescriptorPoolSize);
 
 	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo;
 	descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	descriptorPoolCreateInfo.pNext = nullptr;
 	descriptorPoolCreateInfo.flags = 0;
 	descriptorPoolCreateInfo.maxSets = 1;
-	descriptorPoolCreateInfo.poolSizeCount = 1;
-	descriptorPoolCreateInfo.pPoolSizes = &descriptorPoolSize;
+	descriptorPoolCreateInfo.poolSizeCount = descriptorPoolSizes.size();
+	descriptorPoolCreateInfo.pPoolSizes = descriptorPoolSizes.data();
 	
 	ASSERT_VK(vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, nullptr, &descriptorPool));
 }
@@ -688,19 +673,40 @@ void createDescriptorSet() {
 	descriptorBufferInfo.offset = 0;
 	descriptorBufferInfo.range = sizeof(modelViewProj);
 
-	VkWriteDescriptorSet writeDescriptorSet;
-	writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writeDescriptorSet.pNext = nullptr;
-	writeDescriptorSet.dstSet = descriptorSet;
-	writeDescriptorSet.dstBinding = 0;
-	writeDescriptorSet.dstArrayElement = 0;
-	writeDescriptorSet.descriptorCount = 1;
-	writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	writeDescriptorSet.pImageInfo = nullptr;
-	writeDescriptorSet.pBufferInfo = &descriptorBufferInfo;
-	writeDescriptorSet.pTexelBufferView = nullptr;
+	VkDescriptorImageInfo descriptorImageInfo;
+	descriptorImageInfo.sampler = diamondImage.GetSampler();
+	descriptorImageInfo.imageView = diamondImage.GetImageView();
+	descriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+	std::vector<VkWriteDescriptorSet> writeDescriptorSets;
+
+	VkWriteDescriptorSet modelViewProjWriteDescriptorSet;
+	modelViewProjWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	modelViewProjWriteDescriptorSet.pNext = nullptr;
+	modelViewProjWriteDescriptorSet.dstSet = descriptorSet;
+	modelViewProjWriteDescriptorSet.dstBinding = 0;
+	modelViewProjWriteDescriptorSet.dstArrayElement = 0;
+	modelViewProjWriteDescriptorSet.descriptorCount = 1;
+	modelViewProjWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	modelViewProjWriteDescriptorSet.pImageInfo = nullptr;
+	modelViewProjWriteDescriptorSet.pBufferInfo = &descriptorBufferInfo;
+	modelViewProjWriteDescriptorSet.pTexelBufferView = nullptr;
+	writeDescriptorSets.push_back(modelViewProjWriteDescriptorSet);
+
+	VkWriteDescriptorSet samplerWriteDescriptorSet;
+	samplerWriteDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	samplerWriteDescriptorSet.pNext = nullptr;
+	samplerWriteDescriptorSet.dstSet = descriptorSet;
+	samplerWriteDescriptorSet.dstBinding = 1;
+	samplerWriteDescriptorSet.dstArrayElement = 0;
+	samplerWriteDescriptorSet.descriptorCount = 1;
+	samplerWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerWriteDescriptorSet.pImageInfo = &descriptorImageInfo;
+	samplerWriteDescriptorSet.pBufferInfo = nullptr;
+	samplerWriteDescriptorSet.pTexelBufferView = nullptr;
+	writeDescriptorSets.push_back(samplerWriteDescriptorSet);
+
+	vkUpdateDescriptorSets(device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, nullptr);
 }
 
 void recordCommandBuffers() {
@@ -909,9 +915,9 @@ void updateModelViewProj() {
 
 	modelViewProj = proj * view * model;
 
-	void* rawData;
-	ASSERT_VK(vkMapMemory(device, uniformBufferDeviceMemory, 0, sizeof(modelViewProj), 0, &rawData));
-	memcpy(rawData, &modelViewProj, sizeof(modelViewProj));
+	void* data;
+	ASSERT_VK(vkMapMemory(device, uniformBufferDeviceMemory, 0, sizeof(modelViewProj), 0, &data));
+	memcpy(data, &modelViewProj, sizeof(modelViewProj));
 	vkUnmapMemory(device, uniformBufferDeviceMemory);
 }
 

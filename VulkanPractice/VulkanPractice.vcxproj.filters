@@ -27,6 +27,9 @@
     <ClCompile Include="Image.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="Vertex.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\frag.spv" />
@@ -41,6 +44,9 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="Image.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="Vertex.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>

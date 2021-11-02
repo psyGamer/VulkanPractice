@@ -25,7 +25,7 @@ std::vector<char> readFile(const std::string& filePath) {
 
 // Vulkan Helper Functions
 
-void copyBuffer(VkInstance& instance, VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, VkBuffer& src, VkBuffer& dst, VkDeviceSize size) {
+void copyBuffer(VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, VkBuffer& src, VkBuffer& dst, VkDeviceSize size) {
 
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo;
 	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -71,7 +71,7 @@ void copyBuffer(VkInstance& instance, VkDevice& device, VkQueue& queue, VkComman
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
-void createBuffer(VkInstance& instance, VkDevice& device, VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags) {
+void createBuffer(VkDevice& device, VkPhysicalDevice& physicalDevice, VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags) {
 	VkBufferCreateInfo bufferCreateInfo;
 	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferCreateInfo.pNext = nullptr;
@@ -91,15 +91,15 @@ void createBuffer(VkInstance& instance, VkDevice& device, VkBuffer& buffer, VkDe
 	memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memoryAllocateInfo.pNext = nullptr;
 	memoryAllocateInfo.allocationSize = memoryRequirements.size;
-	memoryAllocateInfo.memoryTypeIndex = findMemoryTypeIndex(instance, memoryRequirements.memoryTypeBits, memoryPropertyFlags);
+	memoryAllocateInfo.memoryTypeIndex = findMemoryTypeIndex(physicalDevice, memoryRequirements.memoryTypeBits, memoryPropertyFlags);
 
 	ASSERT_VK(vkAllocateMemory(device, &memoryAllocateInfo, nullptr, &bufferDeviceMemory));
 	ASSERT_VK(vkBindBufferMemory(device, buffer, bufferDeviceMemory, 0));
 }
 
-uint32_t findMemoryTypeIndex(VkInstance& instance, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+uint32_t findMemoryTypeIndex(VkPhysicalDevice& physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
 	VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
-	vkGetPhysicalDeviceMemoryProperties(getPhysicalDevices(instance)[0], &physicalDeviceMemoryProperties); //TODO civ
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &physicalDeviceMemoryProperties); //TODO civ
 
 	for (uint32_t i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; i++) {
 		if ((typeFilter & (1 << i)) && (physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {

@@ -34,13 +34,13 @@
 
 std::vector<char> readFile(const std::string & filePath);
 
-void copyBuffer(VkInstance& instance, VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, VkBuffer& src, VkBuffer& dst, VkDeviceSize size);
+void copyBuffer(VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, VkBuffer& src, VkBuffer& dst, VkDeviceSize size);
 
-void createBuffer(VkInstance& instance, VkDevice& device, VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags);
+void createBuffer(VkDevice& device, VkPhysicalDevice& physicalDevice, VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsageFlags, VkMemoryPropertyFlags memoryPropertyFlags);
 template <typename T>
-void createAndUploadBuffer(VkInstance& instance, VkDevice& device, VkQueue& queue, VkCommandPool& commandPool, std::vector<T> data, VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkBufferUsageFlags bufferUsageFlags);
+void createAndUploadBuffer(VkDevice& device, VkPhysicalDevice& physicalDevice, VkQueue& queue, VkCommandPool& commandPool, std::vector<T> data, VkBuffer& buffer, VkDeviceMemory& bufferDeviceMemory, VkBufferUsageFlags bufferUsageFlags);
 
-uint32_t findMemoryTypeIndex(VkInstance& instance, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+uint32_t findMemoryTypeIndex(VkPhysicalDevice& physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 uint32_t getSwapchainImageCount(VkDevice & device, VkSwapchainKHR & swapchain);
 std::vector<VkPhysicalDevice> getPhysicalDevices(VkInstance & instance);
 void createShaderModule(const std::vector<char>&code, VkShaderModule * shaderModule, VkDevice & device);
