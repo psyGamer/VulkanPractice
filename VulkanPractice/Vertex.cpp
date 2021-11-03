@@ -5,6 +5,12 @@ Vertex::Vertex(glm::vec3 position, glm::vec2 uvCoord)
 Vertex::Vertex(glm::vec3 position, glm::vec2 uvCoord, glm::vec3 color)
 	: position(position), uvCoord(uvCoord), color(color) { }
 
+bool Vertex::operator==(const Vertex& other) const {
+	return position == other.position &&
+		uvCoord == other.uvCoord &&
+		color == other.color;
+}
+
 VkVertexInputBindingDescription Vertex::getBindingDescription() {
 	VkVertexInputBindingDescription bindingDescription;
 	bindingDescription.binding = 0;

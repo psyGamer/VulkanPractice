@@ -9,14 +9,16 @@
 #include "VulkanUtils.h"
 #include "Image/DepthImage.h"
 #include "Image/Image.h"
-#include "Vertex.h"
 #include "Camera.h"
+#include "Vertex.h"
+#include "Mesh.h"
 
 void recreateSwapchain();
 
 Camera camera;
 Image diamondImage;
 DepthImage depthImage;
+Mesh dragonMesh;
 
 VkInstance instance;
 VkSurfaceKHR surface;
@@ -630,6 +632,13 @@ void loadTexture() {
 	diamondImage.Upload(device, getPhysicalDevices(instance)[0], commandPool, queue);
 }
 
+void loadMesh() {
+	dragonMesh.Create("Assets/dragon.obj");
+
+	vertices = dragonMesh.GetVertices();
+	indices = dragonMesh.GetIndices();
+}
+
 void createVertexBuffer() {
 	createAndUploadBuffer(device, getPhysicalDevices(instance)[0], queue, commandPool, vertices, vertexBuffer, vertexBufferDeviceMemory, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 }
@@ -827,6 +836,7 @@ void startVulkan() {
 	createCommandBuffers();
 
 	loadTexture();
+	loadMesh();
 	createVertexBuffer();
 	createIndexBuffer();
 	createUniformBuffer();
