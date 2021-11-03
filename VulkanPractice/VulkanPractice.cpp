@@ -288,7 +288,7 @@ void validateSurfaceSupport() {
 void createSwapchain() {
 #ifndef _DEBUG
 	VkSurfaceCapabilitiesKHR surfaceCapabilities; // Avoid validation warning when in Release
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevices[0], surface, &surfaceCapabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(getPhysicalDevices(instance)[0], surface, &surfaceCapabilities);
 #endif
 	VkSwapchainCreateInfoKHR swapchainCreateInfo;
 	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -496,7 +496,7 @@ void createPipeline() {
 #else
 	rasterizationCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
 #endif
-	rasterizationCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizationCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterizationCreateInfo.depthBiasEnable = VK_FALSE;
 	rasterizationCreateInfo.depthBiasConstantFactor = VK_FALSE;
 	rasterizationCreateInfo.depthBiasClamp = 0.0f;
@@ -950,13 +950,13 @@ void updateModelViewProj() {
 	float camX = sin(glfwGetTime() * speed) * radius;
 	float camZ = cos(glfwGetTime() * speed) * radius;
 
-	ubo.model = glm::rotate(glm::mat4(1.0f), 0 * timeSinceStart * glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	ubo.model = glm::rotate(glm::mat4(1.0f), 0.75f * timeSinceStart * glm::radians(30.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	//glm::mat4 view = glm::lookAt(glm::vec3(camX, 1.0f, camZ), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	ubo.view = glm::lookAt(camera.GetPosition(), camera.GetPosition() + camera.GetFront(), camera.GetUp());
 	ubo.proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight, 0.01f, 100.0f);
 	ubo.proj[1][1] *= -1; // Flip Y axis
 
-	ubo.lightPosition = glm::vec3(0.0f, 3.0f, 1.0f);
+	ubo.lightPosition = glm::rotate(glm::mat4(1.0f), 2.5f * timeSinceStart * glm::radians(90.0f), glm::vec3(1.0, 0.0f, 1.0f)) * glm::vec4(0.0f, 3.0f, 1.0f, 0.0f);
 
 	void* data;
 	ASSERT_VK(vkMapMemory(device, uniformBufferDeviceMemory, 0, sizeof(ubo), 0, &data));
