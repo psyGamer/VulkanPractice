@@ -1,8 +1,6 @@
 #pragma once
 
-#include <glm/gtx/hash.hpp>
-
-#include "VulkanUtils.h"
+#include "Vulkan.h"
 
 class Vertex {
 

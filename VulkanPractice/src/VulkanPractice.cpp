@@ -10,11 +10,13 @@
 #include "Image/DepthImage.h"
 #include "Image/Image.h"
 
+#include "Pipeline/Shader.h"
+#include "Pipeline/Swapchain.h"
 #include "Pipeline.h"
+#include "Mesh/Vertex.h"
+#include "Mesh/MeshHelper.h"
+#include "Mesh/Mesh.h"
 #include "Camera.h"
-#include "Vertex.h"
-#include "MeshHelper.h"
-#include "Mesh.h"
 
 struct UniformBufferObject {
 	glm::mat4 model;
@@ -32,6 +34,13 @@ DepthImage depthImage;
 Pipeline pipeline;
 Pipeline pipelineWireframe;
 
+Shader vertexShader;
+Shader fragmentShader;
+
+Swapchain swapchain = Swapchain(nullptr, VK_NULL_HANDLE);
+
+// Vulkan
+
 Image diamondImage;
 Image brickImage;
 Image brickNormalImage;
@@ -41,14 +50,10 @@ VkInstance instance;
 VkSurfaceKHR surface;
 VkDevice device;
 VkQueue queue;
-VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 
 std::vector<VkImageView> imageViews;
 std::vector<VkFramebuffer> frameBuffers;
 std::vector<VkCommandBuffer> commandBuffers;
-
-VkShaderModule shaderModuleVert;
-VkShaderModule shaderModuleFrag;
 
 VkRenderPass renderPass;
 
@@ -77,7 +82,7 @@ uint32_t windowWidth = 800, windowHeight = 600;
 float deltaTime = 0.0f;
 bool wireframe = false;
 
-const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
 
 std::vector<Vertex> vertices;
 std::vector<uint32_t> indices;
@@ -293,40 +298,22 @@ void createSwapchain() {
 	VkSurfaceCapabilitiesKHR surfaceCapabilities; // Avoid validation warning when in Release
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(getPhysicalDevices(instance)[0], surface, &surfaceCapabilities);
 #endif
-	VkSwapchainCreateInfoKHR swapchainCreateInfo;
-	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	swapchainCreateInfo.pNext = nullptr;
-	swapchainCreateInfo.flags = 0;
-	swapchainCreateInfo.surface = surface;
-	swapchainCreateInfo.minImageCount = 2; //TODO civ
-	swapchainCreateInfo.imageFormat = imageFormat; //TODO civ
-	swapchainCreateInfo.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR; //TODO civ
-	swapchainCreateInfo.imageExtent = VkExtent2D{ windowWidth, windowHeight };
-	swapchainCreateInfo.imageArrayLayers = 1;
-	swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; //TODO civ
-	swapchainCreateInfo.queueFamilyIndexCount = 0;
-	swapchainCreateInfo.pQueueFamilyIndices = nullptr;
-	swapchainCreateInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-	swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; //TODO civ
-	swapchainCreateInfo.clipped = VK_TRUE;
-	swapchainCreateInfo.oldSwapchain = swapchain;
-
-	ASSERT_VK(vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain));
+	
+	swapchain = Swapchain(window, device);
+	swapchain.Create(getPhysicalDevices(instance)[0], surface, windowWidth, windowHeight);
 }
 
 void createImageViews() {
-	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain);
+	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain.GetSwapchain());
 
 	std::vector<VkImage> swapchainImages;
 	swapchainImages.resize(swapchainImageCount);
-	ASSERT_VK(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data()));
+	ASSERT_VK(vkGetSwapchainImagesKHR(device, swapchain.GetSwapchain(), &swapchainImageCount, swapchainImages.data()));
 
 	imageViews.resize(swapchainImageCount);
 
 	for (int i = 0; i < swapchainImageCount; i++) {
-		createImageView(device, swapchainImages[i], imageFormat, VK_IMAGE_ASPECT_COLOR_BIT, imageViews[i]);
+		createImageView(device, swapchainImages[i], VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, imageViews[i]);
 	}
 }
 
@@ -429,22 +416,19 @@ void createDescriptorSetLayout() {
 }
 
 void createPipeline() {
-	auto shaderCodeVert = readFile("Shaders/vert.spv");
-	auto shaderCodeFrag = readFile("Shaders/frag.spv");
+	vertexShader = Shader(device, "assets/shaders/shader.vert.spv");
+	fragmentShader = Shader(device, "assets/shaders/shader.frag.spv");
 
-	createShaderModule(shaderCodeVert, &shaderModuleVert, device);
-	createShaderModule(shaderCodeFrag, &shaderModuleFrag, device);
-
-	pipeline.Initialize(shaderModuleVert, shaderModuleFrag, windowWidth, windowHeight);
+	pipeline.Initialize(vertexShader, fragmentShader, windowWidth, windowHeight);
 	pipeline.Create(device, renderPass, descriptorSetLayout);
 
-	pipelineWireframe.Initialize(shaderModuleVert, shaderModuleFrag, windowWidth, windowHeight);
+	pipelineWireframe.Initialize(vertexShader, fragmentShader, windowWidth, windowHeight);
 	pipelineWireframe.SetPolygonMode(VK_POLYGON_MODE_LINE);
 	pipelineWireframe.Create(device, renderPass, descriptorSetLayout);
 }
 
 void createFrameBuffers() {
-	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain);
+	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain.GetSwapchain());
 
 	frameBuffers.resize(swapchainImageCount);
 
@@ -483,7 +467,7 @@ void createDepthImage() {
 }
 
 void createCommandBuffers() {
-	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain);
+	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain.GetSwapchain());
 
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo;
 	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -498,25 +482,26 @@ void createCommandBuffers() {
 }
 
 void loadTexture() {
-	diamondImage.LoadImage("Assets/diamond_block.png");
+	diamondImage.LoadImage("assets/textures/diamond_block.png");
 	diamondImage.Upload(device, getPhysicalDevices(instance)[0], commandPool, queue);
 
-	brickImage.LoadImage("Assets/151.jpg");
+	brickImage.LoadImage("assets/textures/151.jpg");
 	brickImage.Upload(device, getPhysicalDevices(instance)[0], commandPool, queue);
-	brickNormalImage.LoadImage("Assets/151_norm.jpg");
+	brickNormalImage.LoadImage("assets/textures/151_norm.jpg");
 	brickNormalImage.Upload(device, getPhysicalDevices(instance)[0], commandPool, queue);
 }
 
 void loadMesh() {
-	/*
-	dragonMesh.Create("Assets/dragon.obj");
+	
+	dragonMesh.Create("assets/models/dragon.obj");
 
 	vertices = dragonMesh.GetVertices();
 	indices = dragonMesh.GetIndices();
-	*/
+	/*
 
 	vertices = getHorizontalQuadVertices();
 	indices = getQuadIndices();
+	*/
 }
 
 void createVertexBuffer() {
@@ -620,7 +605,7 @@ void createDescriptorSet() {
 }
 
 void recordCommandBuffers() {
-	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain);
+	uint32_t swapchainImageCount = getSwapchainImageCount(device, swapchain.GetSwapchain());
 
 	VkCommandBufferBeginInfo commandBufferBeginInfo;
 	commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -647,7 +632,7 @@ void recordCommandBuffers() {
 
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		uint32_t shadingMode = wireframe ? 3 : 1; // 1: Phong 2: Cartoon 3: Flag
+		uint32_t shadingMode = wireframe ? 3 : 2; // 1: Phong 2: Cartoon 3: Flag
 		const Pipeline& pipelineToUse = wireframe ? pipelineWireframe : pipeline;
 
 		vkCmdPushConstants(commandBuffers[i], pipelineToUse.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(shadingMode), &shadingMode);
@@ -772,25 +757,22 @@ void recreateSwapchain() {
 
 	// Create new swapchhain
 
-	const VkSwapchainKHR oldSwapchain = swapchain;
-
 	createDepthImage();
 
-	createSwapchain();
+	swapchain.Recreate(windowWidth, windowHeight);
+
 	createImageViews();
 	createRenderPass();
 	createFrameBuffers();
 
 	createCommandBuffers();
 	recordCommandBuffers();
-
-	vkDestroySwapchainKHR(device, oldSwapchain, nullptr);
 }
 
 void drawFrame() {
 	uint32_t imageIndex;
 
-	vkAcquireNextImageKHR(device, swapchain, std::numeric_limits<uint32_t>::max(), semaphoreImageAvailable, VK_NULL_HANDLE, &imageIndex);
+	vkAcquireNextImageKHR(device, swapchain.GetSwapchain(), std::numeric_limits<uint32_t>::max(), semaphoreImageAvailable, VK_NULL_HANDLE, &imageIndex);
 
 	VkSubmitInfo submitInfo;
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -806,13 +788,15 @@ void drawFrame() {
 
 	ASSERT_VK(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
 
+	VkSwapchainKHR swap = swapchain.GetSwapchain();
+
 	VkPresentInfoKHR presentInfo;
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.pNext = nullptr;
 	presentInfo.waitSemaphoreCount = 1;
 	presentInfo.pWaitSemaphores = &semaphoreRenderingDone;
 	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &swapchain;
+	presentInfo.pSwapchains = &swap;
 	presentInfo.pImageIndices = &imageIndex;
 	presentInfo.pResults = nullptr;
 
@@ -834,7 +818,7 @@ void updateModelViewProj() {
 
 	ubo.model = glm::mat4(1.0f);
 	ubo.model = glm::translate(ubo.model, glm::vec3(0.0f, 0.5f, 0.0f));
-	//ubo.model = glm::scale(ubo.model, glm::vec3(0.1f, 0.1f, 0.1f));
+	ubo.model = glm::scale(ubo.model, glm::vec3(0.1f, 0.1f, 0.1f));
 	ubo.model = glm::rotate(ubo.model, timeSinceStart * glm::radians(10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	
 	ubo.view = glm::lookAt(camera.GetPosition(), camera.GetPosition() + camera.GetFront(), camera.GetUp());
@@ -914,14 +898,15 @@ void shutdownVulkan() {
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 	vkDestroyRenderPass(device, renderPass, nullptr);
 
-	vkDestroyShaderModule(device, shaderModuleVert, nullptr);
-	vkDestroyShaderModule(device, shaderModuleFrag, nullptr);
+	vertexShader.Destory();
+	fragmentShader.Destory();
 
 	for (auto imageView : imageViews) {
 		vkDestroyImageView(device, imageView, nullptr);
 	}
 
-	vkDestroySwapchainKHR(device, swapchain, nullptr);
+	swapchain.Destory();
+
 	vkDestroyDevice(device, nullptr);
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);

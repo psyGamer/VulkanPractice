@@ -2,8 +2,9 @@
 
 #include <vector>
 
+#include "Pipeline/Shader.h"
 #include "Image/DepthImage.h"
-#include "Vertex.h"
+#include "Mesh/Vertex.h"
 
 #include "VulkanUtils.h"
 
@@ -44,7 +45,7 @@ private:
 public:
 	Pipeline();
 
-	void Initialize(VkShaderModule& vertexShader, VkShaderModule& fragmentShader, uint32_t width, uint32_t height);
+	void Initialize(Shader& vertexShader, Shader& fragmentShader, uint32_t width, uint32_t height);
 	void Create(VkDevice& device, VkRenderPass& renderPass, VkDescriptorSetLayout& descriptorSetLayout);
 	void Destory();
 

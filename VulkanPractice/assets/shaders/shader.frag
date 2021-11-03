@@ -21,9 +21,10 @@ void main() {
 	fColor = texture(tex, vUV * 3.0);
 	*/
 
-	vec3 texColor = texture(tex, vUV).xyz;
+	vec3 texColor = vColor;//texture(tex, vUV).xyz;
 
-	vec3 N = normalize(texture(texNormal, vUV).xyz);
+	//vec3 N = normalize(texture(texNormal, vUV).xyz);
+	vec3 N = normalize(vNormal);
 	vec3 V = normalize(vViewVector);
 	vec3 L = normalize(vLightVector);
 	vec3 R = reflect(-L, N);

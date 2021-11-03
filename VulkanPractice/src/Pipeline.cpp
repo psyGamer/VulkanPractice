@@ -2,13 +2,13 @@
 
 Pipeline::Pipeline() { }
 
-void Pipeline::Initialize(VkShaderModule& vertexShader, VkShaderModule& fragmentShader, uint32_t width, uint32_t height) {
+void Pipeline::Initialize(Shader& vertexShader, Shader& fragmentShader, uint32_t width, uint32_t height) {
 
 	m_ShaderStageCreateInfoVertex.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	m_ShaderStageCreateInfoVertex.pNext = nullptr;
 	m_ShaderStageCreateInfoVertex.flags = 0;
 	m_ShaderStageCreateInfoVertex.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	m_ShaderStageCreateInfoVertex.module = vertexShader;
+	m_ShaderStageCreateInfoVertex.module = vertexShader.GetShaderModule();
 	m_ShaderStageCreateInfoVertex.pName = "main";
 	m_ShaderStageCreateInfoVertex.pSpecializationInfo = nullptr;
 
@@ -16,7 +16,7 @@ void Pipeline::Initialize(VkShaderModule& vertexShader, VkShaderModule& fragment
 	m_ShaderStageCreateInfoFragment.pNext = nullptr;
 	m_ShaderStageCreateInfoFragment.flags = 0;
 	m_ShaderStageCreateInfoFragment.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	m_ShaderStageCreateInfoFragment.module = fragmentShader;
+	m_ShaderStageCreateInfoFragment.module = fragmentShader.GetShaderModule();
 	m_ShaderStageCreateInfoFragment.pName = "main";
 	m_ShaderStageCreateInfoFragment.pSpecializationInfo = nullptr;
 

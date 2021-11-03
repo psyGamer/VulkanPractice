@@ -15,6 +15,7 @@ project "VulkanPractice"
 		
 		"C:/Programs/glm",
 		
+		"src",
 		"vendor"
 	}
 	

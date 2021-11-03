@@ -1,27 +1,6 @@
 #include "VulkanUtils.h"
 
 #include <iostream>
-#include <fstream>
-
-// Gleneral Helper Functions
-
-std::vector<char> readFile(const std::string& filePath) {
-	std::ifstream file(filePath, std::ios::binary | std::ios::ate);
-
-	if (file) {
-		size_t fileSize = (size_t)file.tellg();
-		std::vector<char> fileBuffer(fileSize);
-
-		file.seekg(0);
-		file.read(fileBuffer.data(), fileSize);
-		file.close();
-
-		return fileBuffer;
-	}
-
-	std::cerr << "Failed to open file: " << filePath;
-	throw std::runtime_error("Failed to open file!");
-}
 
 // Vulkan Helper Functions
 
@@ -253,7 +232,7 @@ uint32_t findMemoryTypeIndex(VkPhysicalDevice& physicalDevice, uint32_t typeFilt
 	throw std::runtime_error("Found no correct memory type!");
 }
 
-uint32_t getSwapchainImageCount(VkDevice& device, VkSwapchainKHR& swapchain) {
+uint32_t getSwapchainImageCount(const VkDevice& device, const VkSwapchainKHR& swapchain) {
 	uint32_t swapchainImageCount;
 	ASSERT_VK(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr));
 
@@ -275,22 +254,20 @@ std::vector< VkPhysicalDevice> getPhysicalDevices(VkInstance& instance) {
 	return physicalDevices;
 }
 
-void createShaderModule(const std::vector<char>& code, VkShaderModule* shaderModule, VkDevice& device) {
-	VkShaderModuleCreateInfo shaderCreateInfo;
-	shaderCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderCreateInfo.pNext = nullptr;
-	shaderCreateInfo.flags = 0;
-	shaderCreateInfo.codeSize = code.size();
-	shaderCreateInfo.pCode = (uint32_t*)code.data();
-
-	ASSERT_VK(vkCreateShaderModule(device, &shaderCreateInfo, nullptr, shaderModule));
-}
-
 // Print Device Stats
 
 
 
 #ifdef _DEBUG
+
+// Converts a Vulkan version int to a human readable stirng
+#define VERION_STR_VK(ver)\
+	(std::to_string(VK_API_VERSION_MAJOR(ver))\
+		+ std::string(".") + std::to_string(VK_API_VERSION_MINOR(ver))\
+		+ std::string(".") + std::to_string(VK_API_VERSION_PATCH(ver)))
+// Returns "Yes" or "No" depending on, if the specified bit is set
+#define YES_NO_BIT(val, bit) (((val & bit) != 0) ? "Yes" : "No")
+
 void printLayerPropertiesInfo() {
 	uint32_t layerCount;
 	ASSERT_VK(vkEnumerateInstanceLayerProperties(&layerCount, nullptr));
@@ -438,4 +415,8 @@ void printPhysicalDevicesInfo(VkInstance& instance, VkSurfaceKHR& surface) {
 		std::cout << std::endl;
 	}
 }
+
+#undef VERION_STR_VK
+#undef YES_NO_BIT
+
 #endif
