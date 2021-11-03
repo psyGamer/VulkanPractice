@@ -189,6 +189,10 @@ void Pipeline::Destory() {
 	}
 }
 
+void Pipeline::SetPolygonMode(VkPolygonMode polygonMode) {
+	m_RasterizationCreateInfo.polygonMode = polygonMode;
+}
+
 VkPipeline Pipeline::GetPipeline() {
 	if (!m_Created) {
 		std::cerr << "This pipeline isn't created yet!";

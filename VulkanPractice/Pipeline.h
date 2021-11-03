@@ -48,6 +48,8 @@ public:
 	void Create(VkDevice& device, VkRenderPass& renderPass, VkDescriptorSetLayout& descriptorSetLayout);
 	void Destory();
 
+	void SetPolygonMode(VkPolygonMode polygonMode);
+
 	VkPipeline GetPipeline();
 	VkPipelineLayout GetLayout();
 };

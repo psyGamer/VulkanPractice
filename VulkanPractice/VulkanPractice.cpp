@@ -29,6 +29,7 @@ Camera camera;
 DepthImage depthImage;
 
 Pipeline pipeline;
+Pipeline pipelineWireframe;
 
 Image diamondImage;
 Mesh dragonMesh;
@@ -254,6 +255,7 @@ void createLogicalDevice() {
 
 	VkPhysicalDeviceFeatures usedFeatures{ };
 	usedFeatures.samplerAnisotropy = VK_TRUE;
+	usedFeatures.fillModeNonSolid = VK_TRUE;
 
 	const std::vector<const char*> enabledDeviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -433,6 +435,10 @@ void createPipeline() {
 
 	pipeline.Initialize(shaderModuleVert, shaderModuleFrag, windowWidth, windowHeight);
 	pipeline.Create(device, renderPass, descriptorSetLayout);
+
+	pipelineWireframe.Initialize(shaderModuleVert, shaderModuleFrag, windowWidth, windowHeight);
+	pipelineWireframe.SetPolygonMode(VK_POLYGON_MODE_LINE);
+	pipelineWireframe.Create(device, renderPass, descriptorSetLayout);
 }
 
 void createFrameBuffers() {
@@ -650,10 +656,12 @@ void recordCommandBuffers() {
 		//vkCmdDraw(commandBuffers[i], vertices.size(), 1, 0, 0);
 		vkCmdDrawIndexed(commandBuffers[i], indices.size(), 1, 0, 0, 0);
 
+		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineWireframe.GetPipeline());
+
 		viewport.x = windowWidth / 2.0f;
 		vkCmdSetViewport(commandBuffers[i], 0, 1, &viewport);
 		usePhong = VK_FALSE;
-		vkCmdPushConstants(commandBuffers[i], pipeline.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(usePhong), &usePhong);
+		vkCmdPushConstants(commandBuffers[i], pipelineWireframe.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(usePhong), &usePhong);
 
 		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffer, offsets);
 		vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
@@ -806,7 +814,7 @@ void updateModelViewProj() {
 	ubo.model = glm::mat4(1.0f);
 	ubo.model = glm::translate(ubo.model, glm::vec3(0.0f, 0.5f, 0.0f));
 	ubo.model = glm::scale(ubo.model, glm::vec3(0.1f, 0.1f, 0.1f));
-	ubo.model = glm::rotate(ubo.model, timeSinceStart * glm::radians(25.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	ubo.model = glm::rotate(ubo.model, timeSinceStart * glm::radians(10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	
 	ubo.view = glm::lookAt(camera.GetPosition(), camera.GetPosition() + camera.GetFront(), camera.GetUp());
 	ubo.proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight / 2.0f, 0.01f, 100.0f);
@@ -878,6 +886,7 @@ void shutdownVulkan() {
 	vkDestroyCommandPool(device, commandPool, nullptr);
 
 	pipeline.Destory();
+	pipelineWireframe.Destory();
 
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 	vkDestroyRenderPass(device, renderPass, nullptr);
