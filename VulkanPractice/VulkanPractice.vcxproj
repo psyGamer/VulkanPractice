@@ -173,6 +173,7 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="Image\DepthImage.cpp" />
     <ClCompile Include="Image\Image.cpp" />
+    <ClCompile Include="Pipeline.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Vertex.cpp" />
     <ClCompile Include="VulkanPractice.cpp" />
@@ -189,6 +190,7 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Image\DepthImage.h" />
     <ClInclude Include="Image\Image.h" />
+    <ClInclude Include="Pipeline.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Vertex.h" />
     <ClInclude Include="VulkanUtils.h" />
