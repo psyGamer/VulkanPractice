@@ -41,8 +41,13 @@ void Mesh::Create(const std::string& filePath) {
 				-vertexAttributes.vertices[3 * index.vertex_index + 1],
 				 vertexAttributes.vertices[3 * index.vertex_index + 2]
 			};
+			glm::vec3 normals = {
+				 vertexAttributes.normals[3 * index.vertex_index + 0],
+				-vertexAttributes.normals[3 * index.vertex_index + 1],
+				 vertexAttributes.normals[3 * index.vertex_index + 2]
+			};
 
-			Vertex vertex(position, glm::vec2(0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+			Vertex vertex(position, glm::vec2(0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), normals);
 
 			if (vertexIndices.count(vertex) == 0) {
 				vertexIndices[vertex] = vertexIndices.size();

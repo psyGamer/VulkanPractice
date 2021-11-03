@@ -1,14 +1,13 @@
 #include "Vertex.h"
 
-Vertex::Vertex(glm::vec3 position, glm::vec2 uvCoord)
-	: Vertex(position, uvCoord, glm::vec3{ 1.0f, 1.0f, 1.0f }) { }
-Vertex::Vertex(glm::vec3 position, glm::vec2 uvCoord, glm::vec3 color)
-	: position(position), uvCoord(uvCoord), color(color) { }
+Vertex::Vertex(glm::vec3 position, glm::vec2 uvCoord, glm::vec3 color, glm::vec3 normal)
+	: position(position), uvCoord(uvCoord), color(color), normal(normal) { }
 
 bool Vertex::operator==(const Vertex& other) const {
 	return position == other.position &&
 		uvCoord == other.uvCoord &&
-		color == other.color;
+		color == other.color &&
+		normal == other.normal;
 }
 
 VkVertexInputBindingDescription Vertex::getBindingDescription() {
@@ -21,7 +20,7 @@ VkVertexInputBindingDescription Vertex::getBindingDescription() {
 }
 
 std::vector<VkVertexInputAttributeDescription> Vertex::getAttributeDescriptions() {
-	std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
+	std::vector<VkVertexInputAttributeDescription> attributeDescriptions(4);
 	attributeDescriptions[0].location = 0;
 	attributeDescriptions[0].binding = 0;
 	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -36,6 +35,11 @@ std::vector<VkVertexInputAttributeDescription> Vertex::getAttributeDescriptions(
 	attributeDescriptions[2].binding = 0;
 	attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
 	attributeDescriptions[2].offset = offsetof(Vertex, color);
+
+	attributeDescriptions[3].location = 3;
+	attributeDescriptions[3].binding = 0;
+	attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions[3].offset = offsetof(Vertex, normal);
 
 	return attributeDescriptions;
 }

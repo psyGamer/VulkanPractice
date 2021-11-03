@@ -13,6 +13,14 @@
 #include "Vertex.h"
 #include "Mesh.h"
 
+struct UniformBufferObject {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+
+	glm::vec3 lightPosition;
+};
+
 void recreateSwapchain();
 
 Camera camera;
@@ -51,6 +59,8 @@ VkDescriptorSetLayout descriptorSetLayout;
 VkDescriptorPool descriptorPool;
 VkDescriptorSet descriptorSet;
 
+UniformBufferObject ubo;
+
 VkSemaphore semaphoreImageAvailable;
 VkSemaphore semaphoreRenderingDone;
 
@@ -58,10 +68,9 @@ GLFWwindow* window;
 
 uint32_t windowWidth = 800, windowHeight = 600;
 
-glm::mat4 modelViewProj;
-
 const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
+#ifdef GUSTAV
 const float squreSize = .5f;
 
 std::vector<Vertex> vertices = {
@@ -83,6 +92,13 @@ std::vector<uint32_t> indices = {
 	4, 7, 6,
 	4, 5, 7
 };
+
+#else
+
+std::vector<Vertex> vertices;
+std::vector<uint32_t> indices;
+
+#endif
 
 void onWindowResized(GLFWwindow * window, int width, int height) {
 	if (width == 0 || height == 0)
@@ -648,7 +664,7 @@ void createIndexBuffer() {
 }
 
 void createUniformBuffer() {
-	VkDeviceSize bufferSize = sizeof(modelViewProj);
+	VkDeviceSize bufferSize = sizeof(ubo);
 
 	createBuffer(device, getPhysicalDevices(instance)[0], uniformBuffer, uniformBufferDeviceMemory, bufferSize,
 		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
@@ -693,7 +709,7 @@ void createDescriptorSet() {
 	VkDescriptorBufferInfo descriptorBufferInfo;
 	descriptorBufferInfo.buffer = uniformBuffer;
 	descriptorBufferInfo.offset = 0;
-	descriptorBufferInfo.range = sizeof(modelViewProj);
+	descriptorBufferInfo.range = sizeof(ubo);
 
 	VkDescriptorImageInfo descriptorImageInfo;
 	descriptorImageInfo.sampler = diamondImage.GetSampler();
@@ -934,18 +950,17 @@ void updateModelViewProj() {
 	float camX = sin(glfwGetTime() * speed) * radius;
 	float camZ = cos(glfwGetTime() * speed) * radius;
 
-	glm::mat4 model = glm::rotate(glm::mat4(1.0f), 0 * timeSinceStart * glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	ubo.model = glm::rotate(glm::mat4(1.0f), 0 * timeSinceStart * glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 	//glm::mat4 view = glm::lookAt(glm::vec3(camX, 1.0f, camZ), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	glm::mat4 view = glm::lookAt(camera.GetPosition(), camera.GetPosition() + camera.GetFront(), camera.GetUp());
-	glm::mat4 proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight, 0.01f, 100.0f);
+	ubo.view = glm::lookAt(camera.GetPosition(), camera.GetPosition() + camera.GetFront(), camera.GetUp());
+	ubo.proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight, 0.01f, 100.0f);
+	ubo.proj[1][1] *= -1; // Flip Y axis
 
-	proj[1][1] *= -1; // Flip Y axis
-
-	modelViewProj = proj * view * model;
+	ubo.lightPosition = glm::vec3(0.0f, 3.0f, 1.0f);
 
 	void* data;
-	ASSERT_VK(vkMapMemory(device, uniformBufferDeviceMemory, 0, sizeof(modelViewProj), 0, &data));
-	memcpy(data, &modelViewProj, sizeof(modelViewProj));
+	ASSERT_VK(vkMapMemory(device, uniformBufferDeviceMemory, 0, sizeof(ubo), 0, &data));
+	memcpy(data, &ubo, sizeof(ubo));
 	vkUnmapMemory(device, uniformBufferDeviceMemory);
 }
 
