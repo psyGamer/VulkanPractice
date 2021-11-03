@@ -25,18 +25,18 @@ layout(location = 4) out vec3 vLightVector;
 
 void main() {
 	vUV = aUV;
-
+	/*
 	vColor.r = u.Model[0][0] * aColor.r + 0.1;
 	vColor.g = u.View[1][1] * aColor.g + 0.1;
 	vColor.b = u.Proj[2][2] * aColor.b + 0.1;
-
-	//vColor = aColor;
+	*/
+	vColor = aColor;
 
 	vec4 worldPos = u.Model * vec4(aPos, 1.0);
 	
-	vNormal = mat3(u.Model) * aNormal; // Get rid of translation of matrix
-	vViewVector = (u.View * worldPos).xyz;
-	vLightVector = u.LightPosition - worldPos.xyz;
+	vNormal = mat3(u.View) * mat3(u.Model) * aNormal; // mat3(): Get rid of translation of matrix
+	vViewVector = -vec3(u.View * worldPos);
+	vLightVector = mat3(u.View) * (u.LightPosition - vec3(worldPos));
 
 	gl_Position = u.Proj * u.View * u.Model * vec4(aPos, 1.0);
 }

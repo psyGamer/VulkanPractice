@@ -17,11 +17,14 @@ void main() {
 	vec3 N = normalize(vNormal);
 	vec3 V = normalize(vViewVector);
 	vec3 L = normalize(vLightVector);
-	vec3 R = reflect(L, N);
+	vec3 R = reflect(-L, N);
 
 	vec3 ambient = vColor * 0.1;
 	vec3 diffuse = max(dot(N, L), 0.0) * vColor;
 	vec3 specular = pow(max(dot(R, V), 0.0), 16.0) * vec3(1.35);
 
 	fColor = vec4(ambient + diffuse + specular, 1.0);
+
+	float val = dot(N, V);
+//	fColor = vec4(val, val, val, 1.0);
 }

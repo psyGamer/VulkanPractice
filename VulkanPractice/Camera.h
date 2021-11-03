@@ -6,7 +6,7 @@
 class Camera {
 
 private:
-	glm::vec3 m_Position = glm::vec3(0.0f, 0.0f, 1.0f);
+	glm::vec3 m_Position = glm::vec3(0.0f, 0.0f, 1.5f);
 	glm::vec2 m_Rotation = glm::vec2(0.0f, 0.0f);
 
 	float m_Fov = 70.0f;

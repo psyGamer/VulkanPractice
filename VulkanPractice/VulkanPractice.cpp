@@ -68,6 +68,8 @@ GLFWwindow* window;
 
 uint32_t windowWidth = 800, windowHeight = 600;
 
+float deltaTime = 0.0f;
+
 const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
 #ifdef GUSTAV
@@ -166,7 +168,10 @@ void processInput(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 
-	const float cameraSpeed = glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ? 0.2f : 0.05f;
+	const float cameraSpeed = (
+		glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ? 2.0f : 
+		glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS ? 0.5f : 1.0f
+	) * deltaTime;
 
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		camera.Move(+cameraSpeed * camera.GetFront());
@@ -930,33 +935,29 @@ void drawFrame() {
 	ASSERT_VK(vkQueuePresentKHR(queue, &presentInfo));
 }
 
-auto gameStartTime = std::chrono::high_resolution_clock::now();
 auto lastFrameTime = std::chrono::high_resolution_clock::now();
-
-float deltaTime = 0.0f;
 
 float maxDeltaTime = std::numeric_limits<float>::min();
 float minDeletaTime = std::numeric_limits<float>::max();
 
 void updateModelViewProj() {
+	static auto gameStartTime = std::chrono::high_resolution_clock::now();
 	auto currentFrameTime = std::chrono::high_resolution_clock::now();
 
 	float timeSinceStart = std::chrono::duration_cast<std::chrono::milliseconds>(currentFrameTime - gameStartTime).count() / 1000.0f;
 
 	processInput(window);
 
-	const float radius = 1.5f;
-	const float speed = 1.0f;
-	float camX = sin(glfwGetTime() * speed) * radius;
-	float camZ = cos(glfwGetTime() * speed) * radius;
-
-	ubo.model = glm::rotate(glm::mat4(1.0f), 0.75f * timeSinceStart * glm::radians(30.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	//glm::mat4 view = glm::lookAt(glm::vec3(camX, 1.0f, camZ), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	ubo.model = glm::mat4(1.0f);
+	ubo.model = glm::translate(ubo.model, glm::vec3(0.0f, 0.5f, 0.0f));
+	ubo.model = glm::scale(ubo.model, glm::vec3(0.1f, 0.1f, 0.1f));
+	ubo.model = glm::rotate(ubo.model, timeSinceStart * glm::radians(25.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	
 	ubo.view = glm::lookAt(camera.GetPosition(), camera.GetPosition() + camera.GetFront(), camera.GetUp());
 	ubo.proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight, 0.01f, 100.0f);
 	ubo.proj[1][1] *= -1; // Flip Y axis
 
-	ubo.lightPosition = glm::rotate(glm::mat4(1.0f), 2.5f * timeSinceStart * glm::radians(90.0f), glm::vec3(1.0, 0.0f, 1.0f)) * glm::vec4(0.0f, 3.0f, 1.0f, 0.0f);
+	ubo.lightPosition = glm::rotate(glm::mat4(1.0f), 0.0f * timeSinceStart * glm::radians(90.0f), glm::vec3(1.0, 0.0f, 1.0f)) * glm::vec4(0.0f, 3.0f, 1.0f, 0.0f);
 
 	void* data;
 	ASSERT_VK(vkMapMemory(device, uniformBufferDeviceMemory, 0, sizeof(ubo), 0, &data));
