@@ -957,7 +957,7 @@ void updateModelViewProj() {
 	ubo.proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight, 0.01f, 100.0f);
 	ubo.proj[1][1] *= -1; // Flip Y axis
 
-	ubo.lightPosition = glm::rotate(glm::mat4(1.0f), 0.0f * timeSinceStart * glm::radians(90.0f), glm::vec3(1.0, 0.0f, 1.0f)) * glm::vec4(0.0f, 3.0f, 1.0f, 0.0f);
+	ubo.lightPosition = glm::rotate(glm::mat4(1.0f), 0.0f * timeSinceStart * glm::radians(90.0f), glm::vec3(1.0, 0.0f, 1.0f)) * glm::vec4(0.0f, -1.0f, 3.0f, 0.0f);
 
 	void* data;
 	ASSERT_VK(vkMapMemory(device, uniformBufferDeviceMemory, 0, sizeof(ubo), 0, &data));
