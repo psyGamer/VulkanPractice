@@ -793,7 +793,7 @@ void recordCommandBuffers() {
 		VkViewport viewport;
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = windowWidth;
+		viewport.width = windowWidth / 2.0f;
 		viewport.height = windowHeight;
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
@@ -812,6 +812,17 @@ void recordCommandBuffers() {
 		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 		//vkCmdDraw(commandBuffers[i], vertices.size(), 1, 0, 0);
+		vkCmdDrawIndexed(commandBuffers[i], indices.size(), 1, 0, 0, 0);
+
+		viewport.x = windowWidth / 2.0f;
+		vkCmdSetViewport(commandBuffers[i], 0, 1, &viewport);
+		usePhong = VK_FALSE;
+		vkCmdPushConstants(commandBuffers[i], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(usePhong), &usePhong);
+
+		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffer, offsets);
+		vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 		vkCmdDrawIndexed(commandBuffers[i], indices.size(), 1, 0, 0, 0);
 
 		vkCmdEndRenderPass(commandBuffers[i]);
@@ -962,7 +973,7 @@ void updateModelViewProj() {
 	ubo.model = glm::rotate(ubo.model, timeSinceStart * glm::radians(25.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	
 	ubo.view = glm::lookAt(camera.GetPosition(), camera.GetPosition() + camera.GetFront(), camera.GetUp());
-	ubo.proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight, 0.01f, 100.0f);
+	ubo.proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight / 2.0f, 0.01f, 100.0f);
 	ubo.proj[1][1] *= -1; // Flip Y axis
 
 	ubo.lightPosition = glm::rotate(glm::mat4(1.0f), 0.0f * timeSinceStart * glm::radians(90.0f), glm::vec3(1.0, 0.0f, 1.0f)) * glm::vec4(0.0f, -1.0f, 3.0f, 0.0f);
