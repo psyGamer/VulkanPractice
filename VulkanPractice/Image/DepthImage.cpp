@@ -49,6 +49,8 @@ void DepthImage::Destory() {
 	m_ImageMemory = VK_NULL_HANDLE;
 
 	m_Device = VK_NULL_HANDLE;
+
+	m_Created = false;
 }
 
 VkImageView DepthImage::GetImageView() {

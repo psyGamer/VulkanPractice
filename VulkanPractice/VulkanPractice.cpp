@@ -148,7 +148,7 @@ void processInput(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 
-	const float cameraSpeed = 0.05f;
+	const float cameraSpeed = glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ? 0.2f : 0.05f;
 
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		camera.Move(+cameraSpeed * camera.GetFront());
@@ -843,7 +843,7 @@ void recreateSwapchain() {
 
 	// Destroy old swapchhain
 
-	vkDestroyCommandPool(device, commandPool, nullptr);
+	depthImage.Destory();
 
 	for (auto frameBuffer : frameBuffers) {
 		vkDestroyFramebuffer(device, frameBuffer, nullptr);
@@ -859,12 +859,13 @@ void recreateSwapchain() {
 
 	const VkSwapchainKHR oldSwapchain = swapchain;
 
+	createDepthImage();
+
 	createSwapchain();
 	createImageViews();
 	createRenderPass();
 	createFrameBuffers();
 
-	createCommandPool();
 	createCommandBuffers();
 	recordCommandBuffers();
 
