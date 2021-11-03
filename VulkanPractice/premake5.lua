@@ -1,17 +1,31 @@
 project "VulkanPractice"
-	kind "WindowedApp"
+	kind "ConsoleApp"
 	language "C++"
 	cppdialect "C++17"
 	staticruntime "on"
+	
+	fastuptodate "false"
 	
 	targetdir("../Bin/" .. outputdir .. "/%{prj.name}")
 	objdir("../Bin_int/" .. outputdir .. "/%{prj.name}")
 		
 	includedirs {
-		"%VULKAN_SDK%/Include",
-		"%GLFW%/include",
-		"%GLM%",
-		"Vendor"
+		os.getenv("VULKAN_SDK").."/Include",
+		os.getenv("GLFW").."/include",
+		
+		"C:/Programs/glm",
+		
+		"vendor"
+	}
+	
+	libdirs {
+		os.getenv("VULKAN_SDK").."/Lib",
+		os.getenv("GLFW").."/lib-vc2019"
+	}
+	
+	links {
+		"vulkan-1",
+		"glfw3_mt"
 	}
 		
 	files {
@@ -22,9 +36,8 @@ project "VulkanPractice"
 	}
 	
 	prebuildcommands {
-		"echo hi"
+		"call compile_shaders.bat"
 	}
-	
 	
 	filter { "configurations:Debug" }
 		buildoptions "/MTd"

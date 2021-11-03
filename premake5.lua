@@ -40,3 +40,12 @@ newaction {
 		print("Done.")
 	end
 }
+
+newaction {
+	trigger = "debug",
+	description = "Remove all binaries and generated files",
+	
+	execute = function()
+		print(os.getenv("GLM"))
+	end
+}
