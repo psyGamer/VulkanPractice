@@ -13,6 +13,7 @@
 #include "Pipeline.h"
 #include "Camera.h"
 #include "Vertex.h"
+#include "MeshHelper.h"
 #include "Mesh.h"
 
 struct UniformBufferObject {
@@ -32,6 +33,8 @@ Pipeline pipeline;
 Pipeline pipelineWireframe;
 
 Image diamondImage;
+Image brickImage;
+Image brickNormalImage;
 Mesh dragonMesh;
 
 VkInstance instance;
@@ -407,6 +410,14 @@ void createDescriptorSetLayout() {
 	samplerDescriptorSetLayoutBinding.pImmutableSamplers = nullptr;
 	descriptorSetLayoutBindings.push_back(samplerDescriptorSetLayoutBinding);
 
+	VkDescriptorSetLayoutBinding samplerNormalDescriptorSetLayoutBinding;
+	samplerNormalDescriptorSetLayoutBinding.binding = 2;
+	samplerNormalDescriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerNormalDescriptorSetLayoutBinding.descriptorCount = 1;
+	samplerNormalDescriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	samplerNormalDescriptorSetLayoutBinding.pImmutableSamplers = nullptr;
+	descriptorSetLayoutBindings.push_back(samplerNormalDescriptorSetLayoutBinding);
+
 	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo;
 	descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	descriptorSetLayoutCreateInfo.pNext = nullptr;
@@ -489,13 +500,23 @@ void createCommandBuffers() {
 void loadTexture() {
 	diamondImage.LoadImage("Assets/diamond_block.png");
 	diamondImage.Upload(device, getPhysicalDevices(instance)[0], commandPool, queue);
+
+	brickImage.LoadImage("Assets/151.jpg");
+	brickImage.Upload(device, getPhysicalDevices(instance)[0], commandPool, queue);
+	brickNormalImage.LoadImage("Assets/151_norm.jpg");
+	brickNormalImage.Upload(device, getPhysicalDevices(instance)[0], commandPool, queue);
 }
 
 void loadMesh() {
+	/*
 	dragonMesh.Create("Assets/dragon.obj");
 
 	vertices = dragonMesh.GetVertices();
 	indices = dragonMesh.GetIndices();
+	*/
+
+	vertices = getHorizontalQuadVertices();
+	indices = getQuadIndices();
 }
 
 void createVertexBuffer() {
@@ -525,7 +546,7 @@ void createDescriptorPool() {
 
 	VkDescriptorPoolSize samplerDescriptorPoolSize;
 	samplerDescriptorPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerDescriptorPoolSize.descriptorCount = 1;
+	samplerDescriptorPoolSize.descriptorCount = 2;
 	descriptorPoolSizes.push_back(samplerDescriptorPoolSize);
 
 	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo;
@@ -554,10 +575,18 @@ void createDescriptorSet() {
 	descriptorBufferInfo.offset = 0;
 	descriptorBufferInfo.range = sizeof(ubo);
 
+	std::vector<VkDescriptorImageInfo> descriptorImageInfos;
+
 	VkDescriptorImageInfo descriptorImageInfo;
-	descriptorImageInfo.sampler = diamondImage.GetSampler();
-	descriptorImageInfo.imageView = diamondImage.GetImageView();
+	descriptorImageInfo.sampler = brickImage.GetSampler();
+	descriptorImageInfo.imageView = brickImage.GetImageView();
 	descriptorImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	descriptorImageInfos.push_back(descriptorImageInfo);
+	VkDescriptorImageInfo descriptorImageNormalInfo;
+	descriptorImageNormalInfo.sampler = brickNormalImage.GetSampler();
+	descriptorImageNormalInfo.imageView = brickNormalImage.GetImageView();
+	descriptorImageNormalInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	descriptorImageInfos.push_back(descriptorImageNormalInfo);
 
 	std::vector<VkWriteDescriptorSet> writeDescriptorSets;
 
@@ -580,9 +609,9 @@ void createDescriptorSet() {
 	samplerWriteDescriptorSet.dstSet = descriptorSet;
 	samplerWriteDescriptorSet.dstBinding = 1;
 	samplerWriteDescriptorSet.dstArrayElement = 0;
-	samplerWriteDescriptorSet.descriptorCount = 1;
+	samplerWriteDescriptorSet.descriptorCount = descriptorImageInfos.size();
 	samplerWriteDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerWriteDescriptorSet.pImageInfo = &descriptorImageInfo;
+	samplerWriteDescriptorSet.pImageInfo = descriptorImageInfos.data();
 	samplerWriteDescriptorSet.pBufferInfo = nullptr;
 	samplerWriteDescriptorSet.pTexelBufferView = nullptr;
 	writeDescriptorSets.push_back(samplerWriteDescriptorSet);
@@ -868,6 +897,8 @@ void shutdownVulkan() {
 	vkDestroyBuffer(device, indexBuffer, nullptr);
 
 	diamondImage.Destory();
+	brickImage.Destory();
+	brickNormalImage.Destory();
 
 	for (auto frameBuffer : frameBuffers) {
 		vkDestroyFramebuffer(device, frameBuffer, nullptr);

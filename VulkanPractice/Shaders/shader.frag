@@ -9,6 +9,7 @@ layout(location = 4) in vec3 vLightVector;
 layout(location = 0) out vec4 fColor;
 
 layout(binding = 1) uniform sampler2D tex;
+layout(binding = 2) uniform sampler2D texNormal;
 
 layout(push_constant) uniform PushConstants {
 	uint shadingMode;
@@ -20,28 +21,30 @@ void main() {
 	fColor = texture(tex, vUV * 3.0);
 	*/
 
-	vec3 N = normalize(vNormal);
+	vec3 texColor = texture(tex, vUV).xyz;
+
+	vec3 N = normalize(texture(texNormal, vUV).xyz);
 	vec3 V = normalize(vViewVector);
 	vec3 L = normalize(vLightVector);
 	vec3 R = reflect(-L, N);
 
 	// Phong Shader
-	vec3 ambient = vColor * 0.1;
-	vec3 diffuse = max(dot(N, L), 0.0) * vColor;
-	vec3 specular = pow(max(dot(R, V), 0.0), 16.0) * vec3(1.35);
+	vec3 ambient = texColor * 0.1;
+	vec3 diffuse = max(dot(N, L), 0.0) * texColor;
+	vec3 specular = pow(max(dot(R, V), 0.0), 4.0) * vec3(1.035);
 
 	vec3 phongColor = ambient + diffuse + specular;
 	vec3 cartoonColor;
 
 	// Simple Cartoon Shader
 	if (pow(max(dot(R, V), 0.0), 5.0) > 0.5) {
-		cartoonColor = vColor * 3.0;
+		cartoonColor = texColor * 3.0;
 	} else if (max(dot(V, N), 0.0) < 0.5) {
-		cartoonColor = vColor / 10.0;
+		cartoonColor = texColor / 10.0;
 	} else if (max(dot(N, L), 0.0) > 0.1) {
-		cartoonColor = vColor;
+		cartoonColor = texColor;
 	} else {
-		cartoonColor = vColor / 5.0;
+		cartoonColor = texColor / 5.0;
 	}
 
 	if (pushConstants.shadingMode == 1) {
@@ -49,6 +52,6 @@ void main() {
 	} else if (pushConstants.shadingMode == 2) {
 		fColor = vec4(cartoonColor, 1.0);
 	} else {
-		fColor = vec4(vColor, 1.0);
+		fColor = vec4(texColor, 1.0);
 	}
 }
