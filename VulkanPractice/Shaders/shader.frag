@@ -11,7 +11,7 @@ layout(location = 0) out vec4 fColor;
 layout(binding = 1) uniform sampler2D tex;
 
 layout(push_constant) uniform PushConstants {
-	bool usePhong;
+	uint shadingMode;
 } pushConstants;
 
 void main() {
@@ -44,9 +44,11 @@ void main() {
 		cartoonColor = vColor / 5.0;
 	}
 
-	if (pushConstants.usePhong) {
+	if (pushConstants.shadingMode == 1) {
 		fColor = vec4(phongColor, 1.0);
-	} else {
+	} else if (pushConstants.shadingMode == 2) {
 		fColor = vec4(cartoonColor, 1.0);
+	} else {
+		fColor = vec4(vColor, 1.0);
 	}
 }

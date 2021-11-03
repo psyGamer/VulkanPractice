@@ -50,6 +50,6 @@ public:
 
 	void SetPolygonMode(VkPolygonMode polygonMode);
 
-	VkPipeline GetPipeline();
-	VkPipelineLayout GetLayout();
+	VkPipeline GetPipeline() const;
+	VkPipelineLayout GetLayout() const;
 };

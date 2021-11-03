@@ -122,7 +122,7 @@ void Pipeline::Initialize(VkShaderModule& vertexShader, VkShaderModule& fragment
 
 	m_PushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	m_PushConstantRange.offset = 0;
-	m_PushConstantRange.size = sizeof(VkBool32);
+	m_PushConstantRange.size = sizeof(uint32_t);
 
 	m_Initialized = true;
 }
@@ -193,7 +193,7 @@ void Pipeline::SetPolygonMode(VkPolygonMode polygonMode) {
 	m_RasterizationCreateInfo.polygonMode = polygonMode;
 }
 
-VkPipeline Pipeline::GetPipeline() {
+VkPipeline Pipeline::GetPipeline() const {
 	if (!m_Created) {
 		std::cerr << "This pipeline isn't created yet!";
 		throw std::logic_error("This pipeline isn't created yet!");
@@ -201,7 +201,7 @@ VkPipeline Pipeline::GetPipeline() {
 
 	return m_Pipeline;
 }
-VkPipelineLayout Pipeline::GetLayout() {
+VkPipelineLayout Pipeline::GetLayout() const {
 	if (!m_Created) {
 		std::cerr << "This pipeline isn't created yet!";
 		throw std::logic_error("This pipeline isn't created yet!");

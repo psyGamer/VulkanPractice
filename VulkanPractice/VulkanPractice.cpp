@@ -72,38 +72,12 @@ GLFWwindow* window;
 uint32_t windowWidth = 800, windowHeight = 600;
 
 float deltaTime = 0.0f;
+bool wireframe = false;
 
 const VkFormat imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
-#ifdef GUSTAV
-const float squreSize = .5f;
-
-std::vector<Vertex> vertices = {
-	Vertex(glm::vec3{ -1.0f, -1.0f, 0.0f } * squreSize, { 0.0f, 0.0f }, { 1.0f, 0.0f, 1.0f }), // 0 Top Left
-	Vertex(glm::vec3{  1.0f, -1.0f, 0.0f } * squreSize, { 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }), // 1 Top Right
-	Vertex(glm::vec3{ -1.0f,  1.0f, 0.0f } * squreSize, { 0.0f, 1.0f }, { 0.0f, 0.0f, 1.0f }), // 2 Bottom Left
-	Vertex(glm::vec3{  1.0f,  1.0f, 0.0f } * squreSize, { 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f }), // 3 Bottom Right
-
-	Vertex(glm::vec3{ -1.0f, -1.0f, -1.0f } *squreSize, { 0.0f, 0.0f }, { 1.0f, 0.0f, 1.0f }), // 4 Top Left
-	Vertex(glm::vec3{  1.0f, -1.0f, -1.0f } *squreSize, { 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f }), // 5 Top Right
-	Vertex(glm::vec3{ -1.0f,  1.0f, -1.0f } *squreSize, { 0.0f, 1.0f }, { 0.0f, 0.0f, 1.0f }), // 6 Bottom Left
-	Vertex(glm::vec3{  1.0f,  1.0f, -1.0f } *squreSize, { 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f }), // 7 Bottom Right
-};
-
-std::vector<uint32_t> indices = {
-	0, 3, 2,
-	0, 1, 3,
-
-	4, 7, 6,
-	4, 5, 7
-};
-
-#else
-
 std::vector<Vertex> vertices;
 std::vector<uint32_t> indices;
-
-#endif
 
 void onWindowResized(GLFWwindow * window, int width, int height) {
 	if (width == 0 || height == 0)
@@ -167,6 +141,11 @@ void onMouseScroll(GLFWwindow* window, double xoffset, double yoffset) {
 		camera.SetFOV(150.0f);
 }
 
+void createCommandBuffers();
+void recordCommandBuffers();
+
+bool zDown = false;
+
 void processInput(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
@@ -189,7 +168,19 @@ void processInput(GLFWwindow* window) {
 		camera.Move(-glm::vec3(0.0f, 1.0f, 0.0f) * cameraSpeed);
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
 		camera.Move(+glm::vec3(0.0f, 1.0f, 0.0f) * cameraSpeed);
+
+	if (glfwGetKey(window, GLFW_KEY_Z) == GLFW_PRESS && !zDown) {
+		wireframe = !wireframe;
+
+		createCommandBuffers();
+		recordCommandBuffers();
+
+		zDown = true;
+	} else if (glfwGetKey(window, GLFW_KEY_Z) == GLFW_RELEASE && zDown) {
+		zDown = false;
+	}
 }
+
 
 void startGlfw() {
 	glfwInit();
@@ -627,15 +618,16 @@ void recordCommandBuffers() {
 
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		VkBool32 usePhong = VK_TRUE;
-		vkCmdPushConstants(commandBuffers[i], pipeline.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(usePhong), &usePhong);
+		uint32_t shadingMode = wireframe ? 3 : 1; // 1: Phong 2: Cartoon 3: Flag
+		const Pipeline& pipelineToUse = wireframe ? pipelineWireframe : pipeline;
 
-		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.GetPipeline());
+		vkCmdPushConstants(commandBuffers[i], pipelineToUse.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(shadingMode), &shadingMode);
+		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineToUse.GetPipeline());
 
 		VkViewport viewport;
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = windowWidth / 2.0f;
+		viewport.width = windowWidth;
 		viewport.height = windowHeight;
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
@@ -651,11 +643,11 @@ void recordCommandBuffers() {
 		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, &vertexBuffer, offsets);
 		vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.GetLayout(), 0, 1, &descriptorSet, 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineToUse.GetLayout(), 0, 1, &descriptorSet, 0, nullptr);
 
 		//vkCmdDraw(commandBuffers[i], vertices.size(), 1, 0, 0);
 		vkCmdDrawIndexed(commandBuffers[i], indices.size(), 1, 0, 0, 0);
-
+		/*
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineWireframe.GetPipeline());
 
 		viewport.x = windowWidth / 2.0f;
@@ -668,7 +660,7 @@ void recordCommandBuffers() {
 
 		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.GetLayout(), 0, 1, &descriptorSet, 0, nullptr);
 		vkCmdDrawIndexed(commandBuffers[i], indices.size(), 1, 0, 0, 0);
-
+		*/
 		vkCmdEndRenderPass(commandBuffers[i]);
 
 		ASSERT_VK(vkEndCommandBuffer(commandBuffers[i]));
@@ -813,11 +805,11 @@ void updateModelViewProj() {
 
 	ubo.model = glm::mat4(1.0f);
 	ubo.model = glm::translate(ubo.model, glm::vec3(0.0f, 0.5f, 0.0f));
-	ubo.model = glm::scale(ubo.model, glm::vec3(0.1f, 0.1f, 0.1f));
+	//ubo.model = glm::scale(ubo.model, glm::vec3(0.1f, 0.1f, 0.1f));
 	ubo.model = glm::rotate(ubo.model, timeSinceStart * glm::radians(10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	
 	ubo.view = glm::lookAt(camera.GetPosition(), camera.GetPosition() + camera.GetFront(), camera.GetUp());
-	ubo.proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight / 2.0f, 0.01f, 100.0f);
+	ubo.proj = glm::perspective(glm::radians(camera.GetFOV()), windowWidth / (float)windowHeight, 0.01f, 100.0f);
 	ubo.proj[1][1] *= -1; // Flip Y axis
 
 	ubo.lightPosition = glm::rotate(glm::mat4(1.0f), 0.0f * timeSinceStart * glm::radians(90.0f), glm::vec3(1.0, 0.0f, 1.0f)) * glm::vec4(0.0f, -1.0f, 3.0f, 0.0f);

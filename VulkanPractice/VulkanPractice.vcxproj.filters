@@ -39,6 +39,9 @@
     <ClCompile Include="Pipeline.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="MeshHelper.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\frag.spv" />
@@ -65,6 +68,9 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="Pipeline.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="MeshHelper.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
