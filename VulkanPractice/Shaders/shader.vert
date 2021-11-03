@@ -25,12 +25,12 @@ layout(location = 4) out vec3 vLightVector;
 
 void main() {
 	vUV = aUV;
-	/*
+	
 	vColor.r = u.Model[0][0] * aColor.r + 0.1;
 	vColor.g = u.View[1][1] * aColor.g + 0.1;
 	vColor.b = u.Proj[2][2] * aColor.b + 0.1;
-	*/
-	vColor = aColor;
+	
+	//vColor = aColor;
 
 	vec4 worldPos = u.Model * vec4(aPos, 1.0);
 	

@@ -10,6 +10,10 @@ layout(location = 0) out vec4 fColor;
 
 layout(binding = 1) uniform sampler2D tex;
 
+layout(push_constant) uniform PushConstants {
+	bool usePhong;
+} pushConstants;
+
 void main() {
 	/* Texture Shader
 	fColor = texture(tex, vUV) * vec4(vColor, 1.0);
@@ -21,22 +25,28 @@ void main() {
 	vec3 L = normalize(vLightVector);
 	vec3 R = reflect(-L, N);
 
-	/* Phong Shader
+	// Phong Shader
 	vec3 ambient = vColor * 0.1;
 	vec3 diffuse = max(dot(N, L), 0.0) * vColor;
 	vec3 specular = pow(max(dot(R, V), 0.0), 16.0) * vec3(1.35);
 
-	fColor = vec4(ambient + diffuse + specular, 1.0);
-	*/
+	vec3 phongColor = ambient + diffuse + specular;
+	vec3 cartoonColor;
 
+	// Simple Cartoon Shader
 	if (pow(max(dot(R, V), 0.0), 5.0) > 0.5) {
-		fColor = vec4(1.0, 1.0, 1.0, 1.0);
+		cartoonColor = vColor * 3.0;
 	} else if (max(dot(V, N), 0.0) < 0.5) {
-		fColor = vec4(vColor / 10.0, 1.0);
+		cartoonColor = vColor / 10.0;
 	} else if (max(dot(N, L), 0.0) > 0.1) {
-		fColor = vec4(vColor, 1.0);
+		cartoonColor = vColor;
 	} else {
-		//fColor = vec4(1.0, max(dot(V, N), 0.0), 0.0, 1.0);
-		fColor = vec4(vColor / 5.0, 1.0);
+		cartoonColor = vColor / 5.0;
+	}
+
+	if (pushConstants.usePhong) {
+		fColor = vec4(phongColor, 1.0);
+	} else {
+		fColor = vec4(cartoonColor, 1.0);
 	}
 }

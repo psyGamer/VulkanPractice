@@ -545,14 +545,19 @@ void createPipeline() {
 	colorBlendCreateInfo.blendConstants[2] = 0.0f;
 	colorBlendCreateInfo.blendConstants[3] = 0.0f;
 
+	VkPushConstantRange pushConstantRange;
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(VkBool32);
+
 	VkPipelineLayoutCreateInfo layoutCreateInfo;
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	layoutCreateInfo.pNext = nullptr;
 	layoutCreateInfo.flags = 0;
 	layoutCreateInfo.setLayoutCount = 1;
 	layoutCreateInfo.pSetLayouts = &descriptorSetLayout;
-	layoutCreateInfo.pushConstantRangeCount = 0;
-	layoutCreateInfo.pPushConstantRanges = nullptr;
+	layoutCreateInfo.pushConstantRangeCount = 1;
+	layoutCreateInfo.pPushConstantRanges = &pushConstantRange;
 
 	ASSERT_VK(vkCreatePipelineLayout(device, &layoutCreateInfo, nullptr, &pipelineLayout));
 
@@ -779,6 +784,9 @@ void recordCommandBuffers() {
 		renderPassBeginInfo.pClearValues = clearValues.data();
 
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		VkBool32 usePhong = VK_TRUE;
+		vkCmdPushConstants(commandBuffers[i], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(usePhong), &usePhong);
 
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
